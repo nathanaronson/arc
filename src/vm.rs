@@ -1,4 +1,4 @@
-use crate::{ArcError, Chunk, Disassembler, Instruction, Value};
+use crate::{ArcError, Chunk, Compiler, Disassembler, Instruction, Value};
 
 const STACK_MAX: usize = 256;
 
@@ -17,10 +17,9 @@ impl VM {
         }
     }
 
-    pub fn interpret(&mut self, chunk: Chunk) -> Result<(), ArcError> {
-        self.chunk = chunk;
-        self.ip = 0;
-        self.run()
+    pub fn interpret(&mut self, source: &str) -> Result<(), ArcError> {
+        Compiler::compile(source);
+        Ok(())
     }
 
     fn run(&mut self) -> Result<(), ArcError> {
