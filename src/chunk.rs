@@ -33,6 +33,10 @@ impl Chunk {
         self.lines[offset]
     }
 
+    pub(crate) fn get_instruction(&self, offset: usize) -> &Instruction {
+        &self.code[offset]
+    }
+
     pub fn disassemble(&self, name: &str) {
         println!("== {} ==", name);
 

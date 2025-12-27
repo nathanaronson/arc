@@ -1,9 +1,18 @@
-use arc::{Chunk, Instruction};
+use arc::{Chunk, Instruction, VM};
 
 fn main() {
+    let mut vm = VM::new();
     let mut chunk = Chunk::new();
-    let constant: usize = chunk.add_constant(1.2);
-    chunk.write(Instruction::Constant(constant), 123);
+    let index = chunk.add_constant(1.2);
+    chunk.write(Instruction::Constant(index), 123);
+    let index = chunk.add_constant(3.4);
+    chunk.write(Instruction::Constant(index), 123);
+    chunk.write(Instruction::Add, 123);
+    let index = chunk.add_constant(5.6);
+    chunk.write(Instruction::Constant(index), 123);
+    chunk.write(Instruction::Divide, 123);
+    chunk.write(Instruction::Negate, 123);
     chunk.write(Instruction::Return, 123);
     chunk.disassemble("test chunk");
+    let _ = vm.interpret(chunk);
 }
