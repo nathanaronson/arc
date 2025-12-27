@@ -1,4 +1,4 @@
-use arc::{Chunk, Instruction, VM};
+use arc::{Chunk, Disassembler, Instruction, VM};
 
 fn main() {
     let mut vm = VM::new();
@@ -13,6 +13,7 @@ fn main() {
     chunk.write(Instruction::Divide, 123);
     chunk.write(Instruction::Negate, 123);
     chunk.write(Instruction::Return, 123);
-    chunk.disassemble("test chunk");
+    let disassembler = Disassembler::new(&chunk);
+    disassembler.disassemble_chunk("test chunk");
     let _ = vm.interpret(chunk);
 }

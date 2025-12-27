@@ -37,11 +37,7 @@ impl Chunk {
         &self.code[offset]
     }
 
-    pub fn disassemble(&self, name: &str) {
-        println!("== {} ==", name);
-
-        for (offset, instruction) in self.code.iter().enumerate() {
-            instruction.disassemble(self, offset);
-        }
+    pub(crate) fn get_code(&self) -> &[Instruction] {
+        &self.code
     }
 }

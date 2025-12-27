@@ -1,4 +1,4 @@
-use crate::{ArcError, Chunk, Instruction, Value};
+use crate::{ArcError, Chunk, Disassembler, Instruction, Value};
 
 const STACK_MAX: usize = 256;
 
@@ -29,12 +29,15 @@ impl VM {
 
             #[cfg(debug_assertions)]
             {
+                let disassembler = Disassembler::new(&self.chunk);
+
                 print!("          ");
                 for value in self.stack.iter() {
                     print!("[ {:?} ]", value);
                 }
                 println!();
-                instruction.disassemble(&self.chunk, self.ip);
+
+                disassembler.disassemble_instruction(self.ip, &instruction);
             }
 
             self.ip += 1;
