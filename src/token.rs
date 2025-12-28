@@ -11,6 +11,7 @@ impl<'source> Token<'source> {
 }
 
 #[derive(Debug)]
+#[derive(Clone)]
 pub(crate) enum TokenType {
     // Single character tokens.
     LeftParen,

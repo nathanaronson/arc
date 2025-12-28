@@ -1,4 +1,29 @@
+use std::collections::HashMap;
 use crate::{Token, TokenType};
+use lazy_static::lazy_static;
+
+lazy_static! {
+    static ref RESERVED_KEYWORDS: HashMap<&'static str, TokenType> = {
+        let mut hm = HashMap::new();
+        hm.insert("and", TokenType::And);
+        hm.insert("class", TokenType::Class);
+        hm.insert("else", TokenType::Else);
+        hm.insert("false", TokenType::False);
+        hm.insert("for", TokenType::For);
+        hm.insert("fun", TokenType::Fun);
+        hm.insert("if", TokenType::If);
+        hm.insert("nil", TokenType::Nil);
+        hm.insert("or", TokenType::Or);
+        hm.insert("print", TokenType::Print);
+        hm.insert("return", TokenType::Return);
+        hm.insert("super", TokenType::Super);
+        hm.insert("this", TokenType::This);
+        hm.insert("true", TokenType::True);
+        hm.insert("var", TokenType::Var);
+        hm.insert("while", TokenType::While);
+        hm
+    };
+}
 
 pub(crate) struct Scanner<'source> {
     code: &'source str,
@@ -126,25 +151,7 @@ impl<'source> Scanner<'source> {
     }
 
     fn identifier_type(&self) -> TokenType {
-        match self.lexeme() {
-            "and" => TokenType::And,
-            "class" => TokenType::Class,
-            "else" => TokenType::Else,
-            "false" => TokenType::False,
-            "for" => TokenType::For,
-            "fun" => TokenType::Fun,
-            "if" => TokenType::If,
-            "nil" => TokenType::Nil,
-            "or" => TokenType::Or,
-            "print" => TokenType::Print,
-            "return" => TokenType::Return,
-            "super" => TokenType::Super,
-            "this" => TokenType::This,
-            "true" => TokenType::True,
-            "var" => TokenType::Var,
-            "while" => TokenType::While,
-            _ => TokenType::Identifier,
-        }
+        RESERVED_KEYWORDS.get(self.lexeme()).cloned().unwrap_or(TokenType::Identifier)
     }
 
     fn get_char(&self, n: usize) -> u8 {
