@@ -1,3 +1,4 @@
+#[derive(Clone, Copy)]
 pub(crate) struct Token<'source> {
     pub(crate) kind: TokenType,
     pub(crate) line: u32,
@@ -8,10 +9,17 @@ impl<'source> Token<'source> {
     pub(crate) fn new(kind: TokenType, line: u32, lexeme: &'source str) -> Self {
         Self { kind, line, lexeme }
     }
+
+    pub(crate) fn null() -> Self {
+        Self {
+            kind: TokenType::Error,
+            line: 0,
+            lexeme: "",
+        }
+    }
 }
 
-#[derive(Debug)]
-#[derive(Clone)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum TokenType {
     // Single character tokens.
     LeftParen,

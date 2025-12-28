@@ -18,8 +18,14 @@ impl VM {
     }
 
     pub fn interpret(&mut self, source: &str) -> Result<(), ArcError> {
-        Compiler::compile(source);
-        Ok(())
+        let mut chunk = Chunk::new();
+        let mut compiler = Compiler::new(source, &mut chunk);
+        if !compiler.compile() {
+            return Err(ArcError::CompileError);
+        }
+        self.chunk = chunk;
+        self.ip = 0;
+        self.run()
     }
 
     fn run(&mut self) -> Result<(), ArcError> {
