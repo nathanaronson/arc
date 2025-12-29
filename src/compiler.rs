@@ -1,5 +1,8 @@
-use crate::{Chunk, Disassembler, Instruction, Scanner, Token, TokenType, Value};
+use crate::{Chunk, Instruction, Scanner, Token, TokenType, Value};
 use std::collections::HashMap;
+
+#[cfg(debug_assertions)]
+use crate::Disassembler;
 
 #[derive(Eq, PartialEq, PartialOrd, Ord)]
 enum Precedence {
@@ -130,7 +133,7 @@ impl<'source> Compiler<'source> {
 
         // Identifiers / literals.
         rule!(rules, Identifier, None, None, None);
-        rule!(rules, String, None, None, None);
+        rule!(rules, String, Some(Compiler::string), None, None);
         rule!(rules, Number, Some(Compiler::number), None, None);
         rule!(rules, False, Some(Compiler::literal), None, None);
         rule!(rules, Nil, Some(Compiler::literal), None, None);
@@ -240,6 +243,11 @@ impl<'source> Compiler<'source> {
     fn number(&mut self) {
         let value: f64 = self.previous.lexeme.parse().unwrap();
         self.emit_constant(Value::Number(value));
+    }
+
+    fn string(&mut self) {
+        let value = self.previous.lexeme.trim_matches('"').to_string();
+        self.emit_constant(Value::String(value));
     }
 
     fn unary(&mut self) {

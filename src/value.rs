@@ -5,6 +5,7 @@ pub(crate) enum Value {
     Boolean(bool),
     Number(f64),
     Nil,
+    String(String),
 }
 
 impl Display for Value {
@@ -13,6 +14,7 @@ impl Display for Value {
             Self::Boolean(value) => write!(f, "{}", value),
             Self::Number(value) => write!(f, "{}", value),
             Self::Nil => write!(f, "nil"),
+            Self::String(value) => write!(f, "{}", value),
         }
     }
 }
@@ -23,6 +25,7 @@ impl Debug for Value {
             Self::Boolean(value) => write!(f, "Boolean({})", value),
             Self::Number(value) => write!(f, "Number({})", value),
             Self::Nil => write!(f, "nil"),
+            Self::String(value) => write!(f, "String({})", value),
         }
     }
 }

@@ -1,4 +1,7 @@
-use crate::{ArcError, Chunk, Compiler, Disassembler, Instruction, Value};
+use crate::{ArcError, Chunk, Compiler, Instruction, Value};
+
+#[cfg(debug_assertions)]
+use crate::Disassembler;
 
 const STACK_MAX: usize = 256;
 
@@ -71,7 +74,24 @@ impl VM {
                     self.binary_operation(|x, y| x < y, Value::Boolean)?;
                 }
                 Instruction::Add => {
-                    self.binary_operation(|x, y| x + y, Value::Number)?;
+                    let (b, a) = (self.peek_stack(1), self.peek_stack(0));
+                    match (b, a) {
+                        (Value::String(_), Value::String(_)) => {
+                            if let (Value::String(b_val), Value::String(mut a_val)) =
+                                (self.pop_stack(), self.pop_stack())
+                            {
+                                a_val.push_str(&b_val);
+                                self.push_stack(Value::String(a_val));
+                            }
+                        }
+                        (Value::Number(_), Value::Number(_)) => {
+                            self.binary_operation(|x, y| x + y, Value::Number)?
+                        }
+                        _ => {
+                            self.runtime_error("Operands must be two numbers or two strings.");
+                            return Err(ArcError::RuntimeError);
+                        }
+                    }
                 }
                 Instruction::Subtract => {
                     self.binary_operation(|x, y| x - y, Value::Number)?;
@@ -133,7 +153,7 @@ impl VM {
     }
 
     fn peek_stack(&self, distance: usize) -> &Value {
-        &self.stack.get(self.stack.len() - distance - 1).unwrap()
+        self.stack.get(self.stack.len() - distance - 1).unwrap()
     }
 
     fn pop_stack(&mut self) -> Value {
