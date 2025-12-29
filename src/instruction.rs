@@ -4,6 +4,10 @@ pub enum Instruction {
     Nil,
     True,
     False,
+    Pop,
+    GetGlobal(usize),
+    DefineGlobal(usize),
+    SetGlobal(usize),
     Equal,
     Greater,
     Less,
@@ -13,5 +17,6 @@ pub enum Instruction {
     Divide,
     Not,
     Negate,
+    Print,
     Return,
 }

@@ -1,3 +1,5 @@
+use std::collections::{HashMap, hash_map::Entry};
+
 use crate::{ArcError, Chunk, Compiler, Instruction, Value};
 
 #[cfg(debug_assertions)]
@@ -9,6 +11,7 @@ pub struct VM {
     chunk: Chunk,
     ip: usize,
     stack: Vec<Value>,
+    globals: HashMap<String, Value>,
 }
 
 impl VM {
@@ -17,6 +20,7 @@ impl VM {
             chunk: Chunk::new(),
             ip: 0,
             stack: Vec::with_capacity(STACK_MAX),
+            globals: HashMap::new(),
         }
     }
 
@@ -62,6 +66,44 @@ impl VM {
                 }
                 Instruction::False => {
                     self.push_stack(Value::Boolean(false));
+                }
+                Instruction::Pop => {
+                    self.pop_stack();
+                }
+                Instruction::GetGlobal(index) => {
+                    if let Value::String(name) = self.chunk.get_constant(index) {
+                        match self.globals.get(name) {
+                            Some(value) => self.push_stack(value.clone()),
+                            None => {
+                                self.runtime_error(&format!("Undefined variable '{}'.", name));
+                                return Err(ArcError::RuntimeError);
+                            }
+                        }
+                    }
+                }
+                Instruction::DefineGlobal(index) => {
+                    let Value::String(name) = self.chunk.get_constant(index).to_owned() else {
+                        unreachable!()
+                    };
+
+                    let value = self.pop_stack();
+                    self.globals.insert(name, value);
+                }
+                Instruction::SetGlobal(index) => {
+                    let Value::String(name) = self.chunk.get_constant(index) else {
+                        unreachable!()
+                    };
+                    let value = self.peek_stack(0).to_owned();
+                    match self.globals.entry(name.clone()) {
+                        Entry::Vacant(_) => {
+                            self.globals.remove(name);
+                            self.runtime_error(&format!("Undefined variable '{}'.", name));
+                            return Err(ArcError::RuntimeError);
+                        }
+                        Entry::Occupied(mut e) => {
+                            e.insert(value);
+                        }
+                    }
                 }
                 Instruction::Equal => {
                     let (b, a) = (self.pop_stack(), self.pop_stack());
@@ -117,10 +159,10 @@ impl VM {
                     let value = self.pop_stack().is_falsey();
                     self.push_stack(Value::Boolean(value));
                 }
-                Instruction::Return => {
+                Instruction::Print => {
                     println!("{}", self.pop_stack());
-                    return Ok(());
                 }
+                Instruction::Return => return Ok(()),
             }
         }
     }

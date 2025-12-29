@@ -57,7 +57,7 @@ impl<'source> ParseRule<'source> {
     }
 }
 
-type ParseFn<'source> = fn(&mut Compiler<'source>);
+type ParseFn<'source> = fn(&mut Compiler<'source>, bool);
 
 macro_rules! rule {
     ($map:expr, $kind:ident, $prefix:expr, $infix:expr, $prec:ident) => {
@@ -132,7 +132,7 @@ impl<'source> Compiler<'source> {
         rule!(rules, LessEqual, None, Some(Compiler::binary), Comparison);
 
         // Identifiers / literals.
-        rule!(rules, Identifier, None, None, None);
+        rule!(rules, Identifier, Some(Compiler::variable), None, None);
         rule!(rules, String, Some(Compiler::string), None, None);
         rule!(rules, Number, Some(Compiler::number), None, None);
         rule!(rules, False, Some(Compiler::literal), None, None);
@@ -163,7 +163,9 @@ impl<'source> Compiler<'source> {
 
     pub(crate) fn compile(&mut self) -> bool {
         self.advance();
-        self.expression();
+        while !self.matches(TokenType::EoF) {
+            self.declaration();
+        }
         self.consume(TokenType::EoF, "Expected end of expression.");
         self.end_compiler();
         !self.had_error
@@ -186,6 +188,18 @@ impl<'source> Compiler<'source> {
         self.error_at_current(message);
     }
 
+    fn check(&self, kind: TokenType) -> bool {
+        self.current.kind == kind
+    }
+
+    fn matches(&mut self, kind: TokenType) -> bool {
+        if !self.check(kind) {
+            return false;
+        }
+        self.advance();
+        true
+    }
+
     fn emit_instruction(&mut self, instruction: Instruction) {
         self.chunk.write(instruction, self.previous.line);
     }
@@ -196,6 +210,7 @@ impl<'source> Compiler<'source> {
     }
 
     fn end_compiler(&mut self) {
+        self.emit_return();
         #[cfg(debug_assertions)]
         {
             if !self.had_error {
@@ -203,10 +218,9 @@ impl<'source> Compiler<'source> {
                 disassembler.disassemble_chunk("code");
             }
         }
-        self.emit_return();
     }
 
-    fn binary(&mut self) {
+    fn binary(&mut self, _can_assign: bool) {
         let operator_type = self.previous.kind;
         let rule = self.get_rule(operator_type);
         self.parse_precedence(rule.precedence.next());
@@ -226,7 +240,7 @@ impl<'source> Compiler<'source> {
         }
     }
 
-    fn literal(&mut self) {
+    fn literal(&mut self, _can_assign: bool) {
         match self.previous.kind {
             TokenType::False => self.emit_instruction(Instruction::False),
             TokenType::True => self.emit_instruction(Instruction::True),
@@ -235,22 +249,37 @@ impl<'source> Compiler<'source> {
         }
     }
 
-    fn grouping(&mut self) {
+    fn grouping(&mut self, _can_assign: bool) {
         self.expression();
         self.consume(TokenType::RightParen, "Expect ')' after expression.");
     }
 
-    fn number(&mut self) {
+    fn number(&mut self, _can_assign: bool) {
         let value: f64 = self.previous.lexeme.parse().unwrap();
         self.emit_constant(Value::Number(value));
     }
 
-    fn string(&mut self) {
+    fn string(&mut self, _can_assign: bool) {
         let value = self.previous.lexeme.trim_matches('"').to_string();
         self.emit_constant(Value::String(value));
     }
 
-    fn unary(&mut self) {
+    fn variable(&mut self, can_assign: bool) {
+        self.named_variable(self.previous, can_assign);
+    }
+
+    fn named_variable(&mut self, token: Token, can_assign: bool) {
+        let arg = self.identifier_constant(token);
+
+        if can_assign && self.matches(TokenType::Equal) {
+            self.expression();
+            self.emit_instruction(Instruction::SetGlobal(arg));
+        } else {
+            self.emit_instruction(Instruction::GetGlobal(arg));
+        }
+    }
+
+    fn unary(&mut self, _can_assign: bool) {
         let operator_type = self.previous.kind;
         self.parse_precedence(Precedence::Unary);
         match operator_type {
@@ -266,11 +295,16 @@ impl<'source> Compiler<'source> {
         match prefix_rule {
             None => self.error("Expect expression."),
             Some(rule) => {
-                rule(self);
+                let can_assign = precedence <= Precedence::Assignment;
+                rule(self, can_assign);
                 while precedence <= self.get_rule(self.current.kind).precedence {
                     self.advance();
                     let infix_rule = self.get_rule(self.previous.kind).infix.unwrap();
-                    infix_rule(self);
+                    infix_rule(self, can_assign);
+                }
+
+                if can_assign && self.matches(TokenType::Equal) {
+                    self.error("Invalid assignment target.");
                 }
             }
         }
@@ -280,8 +314,67 @@ impl<'source> Compiler<'source> {
         self.rules.get(&kind).unwrap()
     }
 
+    fn parse_variable(&mut self, message: &str) -> usize {
+        self.consume(TokenType::Identifier, message);
+        self.identifier_constant(self.previous)
+    }
+
+    fn define_variable(&mut self, index: usize) {
+        self.emit_instruction(Instruction::DefineGlobal(index));
+    }
+
+    fn identifier_constant(&mut self, token: Token) -> usize {
+        self.make_constant(Value::String(token.lexeme.to_string()))
+    }
+
     fn expression(&mut self) {
         self.parse_precedence(Precedence::Assignment)
+    }
+
+    fn declaration(&mut self) {
+        if self.matches(TokenType::Var) {
+            self.var_declaration();
+        } else {
+            self.statement();
+        }
+
+        if self.panic_mode {
+            self.synchronize();
+        }
+    }
+
+    fn var_declaration(&mut self) {
+        let index = self.parse_variable("Expected variable name.");
+
+        match self.matches(TokenType::Equal) {
+            true => self.expression(),
+            false => self.emit_instruction(Instruction::Nil),
+        }
+
+        self.consume(
+            TokenType::Semicolon,
+            "Expected ';' after variable declaration.",
+        );
+        self.define_variable(index);
+    }
+
+    fn statement(&mut self) {
+        match self.matches(TokenType::Print) {
+            true => self.print_statement(),
+            false => self.expression_statement(),
+        }
+    }
+
+    fn print_statement(&mut self) {
+        self.expression();
+        self.consume(TokenType::Semicolon, "Expected ';' after value.");
+        self.emit_instruction(Instruction::Print);
+    }
+
+    fn expression_statement(&mut self) {
+        self.expression();
+        self.consume(TokenType::Semicolon, "Expected ';' after expression.");
+        self.emit_instruction(Instruction::Pop);
     }
 
     fn emit_return(&mut self) {
@@ -302,6 +395,28 @@ impl<'source> Compiler<'source> {
     fn emit_constant(&mut self, value: Value) {
         let index = self.make_constant(value);
         self.emit_instruction(Instruction::Constant(index));
+    }
+
+    fn synchronize(&mut self) {
+        self.panic_mode = false;
+
+        while self.current.kind != TokenType::EoF {
+            if self.previous.kind == TokenType::Semicolon {
+                return;
+            }
+            match self.current.kind {
+                TokenType::Class
+                | TokenType::Fun
+                | TokenType::Var
+                | TokenType::For
+                | TokenType::If
+                | TokenType::While
+                | TokenType::Print
+                | TokenType::Return => return,
+                _ => {}
+            }
+            self.advance();
+        }
     }
 
     fn error_at_current(&mut self, message: &str) {

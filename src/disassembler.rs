@@ -35,6 +35,12 @@ impl<'vm> Disassembler<'vm> {
             Instruction::Nil => self.simple_instruction("OP_NIL"),
             Instruction::True => self.simple_instruction("OP_TRUE"),
             Instruction::False => self.simple_instruction("OP_FALSE"),
+            Instruction::Pop => self.simple_instruction("OP_POP"),
+            Instruction::GetGlobal(index) => self.constant_instruction("OP_GET_GLOBAL", *index),
+            Instruction::DefineGlobal(index) => {
+                self.constant_instruction("OP_DEFINE_GLOBAL", *index)
+            }
+            Instruction::SetGlobal(index) => self.constant_instruction("OP_SET_GLOBAL", *index),
             Instruction::Equal => self.simple_instruction("OP_EQUAL"),
             Instruction::Greater => self.simple_instruction("OP_GREATER"),
             Instruction::Less => self.simple_instruction("OP_LESS"),
@@ -44,6 +50,7 @@ impl<'vm> Disassembler<'vm> {
             Instruction::Divide => self.simple_instruction("OP_DIVIDE"),
             Instruction::Not => self.simple_instruction("OP_NOT"),
             Instruction::Negate => self.simple_instruction("OP_NEGATE"),
+            Instruction::Print => self.simple_instruction("OP_PRINT"),
             Instruction::Return => self.simple_instruction("OP_RETURN"),
         }
     }
