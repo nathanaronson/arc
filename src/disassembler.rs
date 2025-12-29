@@ -32,10 +32,17 @@ impl<'vm> Disassembler<'vm> {
 
         match instruction {
             Instruction::Constant(index) => self.constant_instruction("OP_CONSTANT", *index),
+            Instruction::Nil => self.simple_instruction("OP_NIL"),
+            Instruction::True => self.simple_instruction("OP_TRUE"),
+            Instruction::False => self.simple_instruction("OP_FALSE"),
+            Instruction::Equal => self.simple_instruction("OP_EQUAL"),
+            Instruction::Greater => self.simple_instruction("OP_GREATER"),
+            Instruction::Less => self.simple_instruction("OP_LESS"),
             Instruction::Add => self.simple_instruction("OP_ADD"),
             Instruction::Subtract => self.simple_instruction("OP_SUBTRACT"),
             Instruction::Multiply => self.simple_instruction("OP_MULTIPLY"),
             Instruction::Divide => self.simple_instruction("OP_DIVIDE"),
+            Instruction::Not => self.simple_instruction("OP_NOT"),
             Instruction::Negate => self.simple_instruction("OP_NEGATE"),
             Instruction::Return => self.simple_instruction("OP_RETURN"),
         }

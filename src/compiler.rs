@@ -113,22 +113,28 @@ impl<'source> Compiler<'source> {
         rule!(rules, Star, None, Some(Compiler::binary), Factor);
 
         // Logical / comparison.
-        rule!(rules, Bang, None, None, None);
-        rule!(rules, BangEqual, None, None, None);
+        rule!(rules, Bang, Some(Compiler::unary), None, None);
+        rule!(rules, BangEqual, None, Some(Compiler::binary), Equality);
         rule!(rules, Equal, None, None, None);
-        rule!(rules, EqualEqual, None, None, None);
-        rule!(rules, Greater, None, None, None);
-        rule!(rules, GreaterEqual, None, None, None);
-        rule!(rules, Less, None, None, None);
-        rule!(rules, LessEqual, None, None, None);
+        rule!(rules, EqualEqual, None, Some(Compiler::binary), Equality);
+        rule!(rules, Greater, None, Some(Compiler::binary), Comparison);
+        rule!(
+            rules,
+            GreaterEqual,
+            None,
+            Some(Compiler::binary),
+            Comparison
+        );
+        rule!(rules, Less, None, Some(Compiler::binary), Comparison);
+        rule!(rules, LessEqual, None, Some(Compiler::binary), Comparison);
 
         // Identifiers / literals.
         rule!(rules, Identifier, None, None, None);
         rule!(rules, String, None, None, None);
         rule!(rules, Number, Some(Compiler::number), None, None);
-        rule!(rules, False, None, None, None);
-        rule!(rules, Nil, None, None, None);
-        rule!(rules, True, None, None, None);
+        rule!(rules, False, Some(Compiler::literal), None, None);
+        rule!(rules, Nil, Some(Compiler::literal), None, None);
+        rule!(rules, True, Some(Compiler::literal), None, None);
 
         // Keywords.
         rule!(rules, And, None, None, None);
@@ -181,6 +187,11 @@ impl<'source> Compiler<'source> {
         self.chunk.write(instruction, self.previous.line);
     }
 
+    fn emit_instructions(&mut self, instruction_1: Instruction, instruction_2: Instruction) {
+        self.emit_instruction(instruction_1);
+        self.emit_instruction(instruction_2);
+    }
+
     fn end_compiler(&mut self) {
         #[cfg(debug_assertions)]
         {
@@ -198,10 +209,25 @@ impl<'source> Compiler<'source> {
         self.parse_precedence(rule.precedence.next());
 
         match operator_type {
+            TokenType::BangEqual => self.emit_instructions(Instruction::Equal, Instruction::Not),
+            TokenType::EqualEqual => self.emit_instruction(Instruction::Equal),
+            TokenType::Greater => self.emit_instruction(Instruction::Greater),
+            TokenType::GreaterEqual => self.emit_instructions(Instruction::Less, Instruction::Not),
+            TokenType::Less => self.emit_instruction(Instruction::Less),
+            TokenType::LessEqual => self.emit_instructions(Instruction::Greater, Instruction::Not),
             TokenType::Plus => self.emit_instruction(Instruction::Add),
             TokenType::Minus => self.emit_instruction(Instruction::Subtract),
             TokenType::Star => self.emit_instruction(Instruction::Multiply),
             TokenType::Slash => self.emit_instruction(Instruction::Divide),
+            _ => {}
+        }
+    }
+
+    fn literal(&mut self) {
+        match self.previous.kind {
+            TokenType::False => self.emit_instruction(Instruction::False),
+            TokenType::True => self.emit_instruction(Instruction::True),
+            TokenType::Nil => self.emit_instruction(Instruction::Nil),
             _ => {}
         }
     }
@@ -213,14 +239,16 @@ impl<'source> Compiler<'source> {
 
     fn number(&mut self) {
         let value: f64 = self.previous.lexeme.parse().unwrap();
-        self.emit_constant(value);
+        self.emit_constant(Value::Number(value));
     }
 
     fn unary(&mut self) {
         let operator_type = self.previous.kind;
         self.parse_precedence(Precedence::Unary);
-        if matches!(operator_type, TokenType::Minus) {
-            self.emit_instruction(Instruction::Negate);
+        match operator_type {
+            TokenType::Minus => self.emit_instruction(Instruction::Negate),
+            TokenType::Bang => self.emit_instruction(Instruction::Not),
+            _ => {}
         }
     }
 

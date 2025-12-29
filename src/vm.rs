@@ -48,35 +48,103 @@ impl VM {
             self.ip += 1;
             match instruction {
                 Instruction::Constant(index) => {
-                    let constant = *self.chunk.get_constant(index);
-                    self.stack.push(constant);
+                    let constant = self.chunk.get_constant(index).clone();
+                    self.push_stack(constant);
+                }
+                Instruction::Nil => {
+                    self.push_stack(Value::Nil);
+                }
+                Instruction::True => {
+                    self.push_stack(Value::Boolean(true));
+                }
+                Instruction::False => {
+                    self.push_stack(Value::Boolean(false));
+                }
+                Instruction::Equal => {
+                    let (b, a) = (self.pop_stack(), self.pop_stack());
+                    self.push_stack(Value::Boolean(a == b));
+                }
+                Instruction::Greater => {
+                    self.binary_operation(|x, y| x > y, Value::Boolean)?;
+                }
+                Instruction::Less => {
+                    self.binary_operation(|x, y| x < y, Value::Boolean)?;
                 }
                 Instruction::Add => {
-                    self.binary_operation(|x, y| x + y);
+                    self.binary_operation(|x, y| x + y, Value::Number)?;
                 }
                 Instruction::Subtract => {
-                    self.binary_operation(|x, y| x - y);
+                    self.binary_operation(|x, y| x - y, Value::Number)?;
                 }
                 Instruction::Multiply => {
-                    self.binary_operation(|x, y| x * y);
+                    self.binary_operation(|x, y| x * y, Value::Number)?;
                 }
                 Instruction::Divide => {
-                    self.binary_operation(|x, y| x / y);
+                    self.binary_operation(|x, y| x / y, Value::Number)?;
                 }
-                Instruction::Negate => {
-                    let value = -self.stack.pop().unwrap();
-                    self.stack.push(value);
+                Instruction::Negate => match self.peek_stack(0) {
+                    Value::Number(_) => {
+                        if let Value::Number(value) = self.pop_stack() {
+                            self.push_stack(Value::Number(-value));
+                        }
+                    }
+                    _ => {
+                        self.runtime_error("Operand must be a number.");
+                        return Err(ArcError::RuntimeError);
+                    }
+                },
+                Instruction::Not => {
+                    let value = self.pop_stack().is_falsey();
+                    self.push_stack(Value::Boolean(value));
                 }
                 Instruction::Return => {
-                    println!("{}", self.stack.pop().unwrap());
+                    println!("{}", self.pop_stack());
                     return Ok(());
                 }
             }
         }
     }
 
-    fn binary_operation<F: Fn(Value, Value) -> Value>(&mut self, operation: F) {
-        let (right, left) = (self.stack.pop().unwrap(), self.stack.pop().unwrap());
-        self.stack.push(operation(left, right));
+    fn runtime_error(&mut self, message: &str) {
+        eprintln!("{}", message);
+
+        let line = self.chunk.get_line(self.ip - 1);
+        eprintln!("[line {}] in script", line);
+        self.clear_stack();
+    }
+
+    fn binary_operation<Type>(
+        &mut self,
+        operation: fn(f64, f64) -> Type,
+        value_type: fn(Type) -> Value,
+    ) -> Result<(), ArcError> {
+        let top = (self.peek_stack(0), self.peek_stack(1));
+        if let (Value::Number(_), Value::Number(_)) = top {
+            if let (Value::Number(r_val), Value::Number(l_val)) =
+                (self.pop_stack(), self.pop_stack())
+            {
+                self.push_stack(value_type(operation(l_val, r_val)));
+            }
+            Ok(())
+        } else {
+            self.runtime_error("Operands must be numbers.");
+            Err(ArcError::RuntimeError)
+        }
+    }
+
+    fn peek_stack(&self, distance: usize) -> &Value {
+        &self.stack.get(self.stack.len() - distance - 1).unwrap()
+    }
+
+    fn pop_stack(&mut self) -> Value {
+        self.stack.pop().unwrap()
+    }
+
+    fn push_stack(&mut self, value: Value) {
+        self.stack.push(value);
+    }
+
+    fn clear_stack(&mut self) {
+        self.stack.clear();
     }
 }
