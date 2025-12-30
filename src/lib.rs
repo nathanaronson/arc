@@ -9,7 +9,7 @@ mod value;
 mod vm;
 
 pub use chunk::Chunk;
-use compiler::Compiler;
+use compiler::Parser;
 pub use disassembler::Disassembler;
 pub use error::ArcError;
 pub use instruction::Instruction;

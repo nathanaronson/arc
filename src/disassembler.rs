@@ -36,6 +36,8 @@ impl<'vm> Disassembler<'vm> {
             Instruction::True => self.simple_instruction("OP_TRUE"),
             Instruction::False => self.simple_instruction("OP_FALSE"),
             Instruction::Pop => self.simple_instruction("OP_POP"),
+            Instruction::GetLocal(index) => self.byte_instruction("OP_GET_LOCAL", *index),
+            Instruction::SetLocal(index) => self.byte_instruction("OP_SET_LOCAL", *index),
             Instruction::GetGlobal(index) => self.constant_instruction("OP_GET_GLOBAL", *index),
             Instruction::DefineGlobal(index) => {
                 self.constant_instruction("OP_DEFINE_GLOBAL", *index)
@@ -58,6 +60,10 @@ impl<'vm> Disassembler<'vm> {
     fn constant_instruction(&self, name: &str, index: usize) {
         let value = self.chunk.get_constant(index);
         println!("{:<16} {:4} '{}'", name, index, value);
+    }
+
+    fn byte_instruction(&self, name: &str, index: usize) {
+        println!("{:<16} {:4}", name, index);
     }
 
     fn simple_instruction(&self, name: &str) {

@@ -1,11 +1,9 @@
 use std::collections::{HashMap, hash_map::Entry};
 
-use crate::{ArcError, Chunk, Compiler, Instruction, Value};
+use crate::{ArcError, Chunk, Instruction, Parser, Value};
 
 #[cfg(debug_assertions)]
 use crate::Disassembler;
-
-const STACK_MAX: usize = 256;
 
 pub struct VM {
     chunk: Chunk,
@@ -15,18 +13,20 @@ pub struct VM {
 }
 
 impl VM {
+    const STACK_MAX: usize = 256;
+
     pub fn new() -> Self {
         Self {
             chunk: Chunk::new(),
             ip: 0,
-            stack: Vec::with_capacity(STACK_MAX),
+            stack: Vec::with_capacity(Self::STACK_MAX),
             globals: HashMap::new(),
         }
     }
 
     pub fn interpret(&mut self, source: &str) -> Result<(), ArcError> {
         let mut chunk = Chunk::new();
-        let mut compiler = Compiler::new(source, &mut chunk);
+        let mut compiler = Parser::new(source, &mut chunk);
         if !compiler.compile() {
             return Err(ArcError::CompileError);
         }
@@ -69,6 +69,15 @@ impl VM {
                 }
                 Instruction::Pop => {
                     self.pop_stack();
+                }
+                Instruction::GetLocal(index) => {
+                    let value = self.stack.get(index).unwrap().clone();
+                    self.push_stack(value);
+                }
+                Instruction::SetLocal(index) => {
+                    let top = self.peek_stack(0).clone();
+                    let value = self.stack.get_mut(index).unwrap();
+                    *value = top;
                 }
                 Instruction::GetGlobal(index) => {
                     if let Value::String(name) = self.chunk.get_constant(index) {

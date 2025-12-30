@@ -5,6 +5,8 @@ pub enum Instruction {
     True,
     False,
     Pop,
+    GetLocal(usize),
+    SetLocal(usize),
     GetGlobal(usize),
     DefineGlobal(usize),
     SetGlobal(usize),

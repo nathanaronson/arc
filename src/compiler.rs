@@ -57,7 +57,7 @@ impl<'source> ParseRule<'source> {
     }
 }
 
-type ParseFn<'source> = fn(&mut Compiler<'source>, bool);
+type ParseFn<'source> = fn(&mut Parser<'source>, bool);
 
 macro_rules! rule {
     ($map:expr, $kind:ident, $prefix:expr, $infix:expr, $prec:ident) => {
@@ -68,24 +68,67 @@ macro_rules! rule {
     };
 }
 
-pub(crate) struct Compiler<'source> {
+struct Compiler<'source> {
+    locals: Vec<Local<'source>>,
+    scope_depth: i32,
+}
+
+impl<'source> Compiler<'source> {
+    const LOCAL_MAX: usize = u8::MAX as usize + 1;
+
+    fn new() -> Self {
+        Self {
+            locals: Vec::with_capacity(Self::LOCAL_MAX),
+            scope_depth: 0,
+        }
+    }
+
+    fn is_same_scope(&self, name: &Token) -> u32 {
+        let mut count = 0;
+        for local in self.locals.iter().rev() {
+            if local.depth != -1 && local.depth < self.scope_depth {
+                return count;
+            }
+
+            if name.lexeme == local.name.lexeme {
+                count += 1;
+            }
+        }
+        count
+    }
+}
+
+struct Local<'source> {
+    name: Token<'source>,
+    depth: i32,
+}
+
+impl<'source> Local<'source> {
+    fn new(name: Token<'source>, depth: i32) -> Self {
+        Self { name, depth }
+    }
+}
+
+pub(crate) struct Parser<'source> {
     scanner: Scanner<'source>,
     rules: HashMap<TokenType, ParseRule<'source>>,
     previous: Token<'source>,
     current: Token<'source>,
     chunk: &'source mut Chunk,
+    compiler: Compiler<'source>,
     had_error: bool,
     panic_mode: bool,
 }
 
-impl<'source> Compiler<'source> {
+impl<'source> Parser<'source> {
     pub(crate) fn new(source: &'source str, chunk: &'source mut Chunk) -> Self {
         Self {
             scanner: Scanner::new(source),
-            rules: Compiler::build_rules(),
+            rules: Parser::build_rules(),
             previous: Token::null(),
             current: Token::null(),
             chunk,
+            compiler: Compiler::new(),
             had_error: false,
             panic_mode: false,
         }
@@ -95,7 +138,7 @@ impl<'source> Compiler<'source> {
         let mut rules = HashMap::new();
 
         // Literals / grouping.
-        rule!(rules, LeftParen, Some(Compiler::grouping), None, None);
+        rule!(rules, LeftParen, Some(Parser::grouping), None, None);
         rule!(rules, RightParen, None, None, None);
         rule!(rules, LeftBrace, None, None, None);
         rule!(rules, RightBrace, None, None, None);
@@ -106,38 +149,32 @@ impl<'source> Compiler<'source> {
         rule!(
             rules,
             Minus,
-            Some(Compiler::unary),
-            Some(Compiler::binary),
+            Some(Parser::unary),
+            Some(Parser::binary),
             Term
         );
-        rule!(rules, Plus, None, Some(Compiler::binary), Term);
+        rule!(rules, Plus, None, Some(Parser::binary), Term);
         rule!(rules, Semicolon, None, None, None);
-        rule!(rules, Slash, None, Some(Compiler::binary), Factor);
-        rule!(rules, Star, None, Some(Compiler::binary), Factor);
+        rule!(rules, Slash, None, Some(Parser::binary), Factor);
+        rule!(rules, Star, None, Some(Parser::binary), Factor);
 
         // Logical / comparison.
-        rule!(rules, Bang, Some(Compiler::unary), None, None);
-        rule!(rules, BangEqual, None, Some(Compiler::binary), Equality);
+        rule!(rules, Bang, Some(Parser::unary), None, None);
+        rule!(rules, BangEqual, None, Some(Parser::binary), Equality);
         rule!(rules, Equal, None, None, None);
-        rule!(rules, EqualEqual, None, Some(Compiler::binary), Equality);
-        rule!(rules, Greater, None, Some(Compiler::binary), Comparison);
-        rule!(
-            rules,
-            GreaterEqual,
-            None,
-            Some(Compiler::binary),
-            Comparison
-        );
-        rule!(rules, Less, None, Some(Compiler::binary), Comparison);
-        rule!(rules, LessEqual, None, Some(Compiler::binary), Comparison);
+        rule!(rules, EqualEqual, None, Some(Parser::binary), Equality);
+        rule!(rules, Greater, None, Some(Parser::binary), Comparison);
+        rule!(rules, GreaterEqual, None, Some(Parser::binary), Comparison);
+        rule!(rules, Less, None, Some(Parser::binary), Comparison);
+        rule!(rules, LessEqual, None, Some(Parser::binary), Comparison);
 
         // Identifiers / literals.
-        rule!(rules, Identifier, Some(Compiler::variable), None, None);
-        rule!(rules, String, Some(Compiler::string), None, None);
-        rule!(rules, Number, Some(Compiler::number), None, None);
-        rule!(rules, False, Some(Compiler::literal), None, None);
-        rule!(rules, Nil, Some(Compiler::literal), None, None);
-        rule!(rules, True, Some(Compiler::literal), None, None);
+        rule!(rules, Identifier, Some(Parser::variable), None, None);
+        rule!(rules, String, Some(Parser::string), None, None);
+        rule!(rules, Number, Some(Parser::number), None, None);
+        rule!(rules, False, Some(Parser::literal), None, None);
+        rule!(rules, Nil, Some(Parser::literal), None, None);
+        rule!(rules, True, Some(Parser::literal), None, None);
 
         // Keywords.
         rule!(rules, And, None, None, None);
@@ -220,6 +257,23 @@ impl<'source> Compiler<'source> {
         }
     }
 
+    fn begin_scope(&mut self) {
+        self.compiler.scope_depth += 1;
+    }
+
+    fn end_scope(&mut self) {
+        self.compiler.scope_depth -= 1;
+
+        while let Some(local) = self.compiler.locals.last() {
+            if local.depth > self.compiler.scope_depth {
+                self.emit_instruction(Instruction::Pop);
+                self.compiler.locals.pop();
+            } else {
+                break;
+            }
+        }
+    }
+
     fn binary(&mut self, _can_assign: bool) {
         let operator_type = self.previous.kind;
         let rule = self.get_rule(operator_type);
@@ -268,14 +322,40 @@ impl<'source> Compiler<'source> {
         self.named_variable(self.previous, can_assign);
     }
 
-    fn named_variable(&mut self, token: Token, can_assign: bool) {
-        let arg = self.identifier_constant(token);
+    fn resolve_local(&mut self, name: &Token) -> Option<usize> {
+        for (i, local) in self.compiler.locals.iter().enumerate().rev() {
+            if name.lexeme == local.name.lexeme {
+                return if local.depth == -1 {
+                    self.error("Can't read local variable in its own initializer");
+                    None
+                } else {
+                    Some(i)
+                };
+            }
+        }
+        None
+    }
+
+    fn named_variable(&mut self, name: Token, can_assign: bool) {
+        let get_op;
+        let set_op;
+        match self.resolve_local(&name) {
+            Some(arg) => {
+                get_op = Instruction::GetLocal(arg);
+                set_op = Instruction::SetLocal(arg);
+            }
+            None => {
+                let arg = self.identifier_constant(name);
+                get_op = Instruction::GetGlobal(arg);
+                set_op = Instruction::SetGlobal(arg);
+            }
+        }
 
         if can_assign && self.matches(TokenType::Equal) {
             self.expression();
-            self.emit_instruction(Instruction::SetGlobal(arg));
+            self.emit_instruction(set_op);
         } else {
-            self.emit_instruction(Instruction::GetGlobal(arg));
+            self.emit_instruction(get_op);
         }
     }
 
@@ -316,19 +396,62 @@ impl<'source> Compiler<'source> {
 
     fn parse_variable(&mut self, message: &str) -> usize {
         self.consume(TokenType::Identifier, message);
+        self.declare_variable();
+        if self.compiler.scope_depth > 0 {
+            return 0;
+        }
         self.identifier_constant(self.previous)
     }
 
     fn define_variable(&mut self, index: usize) {
+        if self.compiler.scope_depth > 0 {
+            self.mark_initialized();
+            return;
+        }
         self.emit_instruction(Instruction::DefineGlobal(index));
+    }
+
+    fn mark_initialized(&mut self) {
+        self.compiler.locals.last_mut().unwrap().depth = self.compiler.scope_depth;
     }
 
     fn identifier_constant(&mut self, token: Token) -> usize {
         self.make_constant(Value::String(token.lexeme.to_string()))
     }
 
+    fn declare_variable(&mut self) {
+        if self.compiler.scope_depth == 0 {
+            return;
+        }
+
+        let name = self.previous;
+        for _ in 0..self.compiler.is_same_scope(&name) {
+            self.error("Already a variable with this name in this scope.");
+        }
+
+        self.add_local(name);
+    }
+
+    fn add_local(&mut self, name: Token<'source>) {
+        if self.compiler.locals.len() == Compiler::LOCAL_MAX {
+            self.error("Too many local variables in function.");
+            return;
+        }
+
+        let local = Local::new(name, -1);
+        self.compiler.locals.push(local);
+    }
+
     fn expression(&mut self) {
         self.parse_precedence(Precedence::Assignment)
+    }
+
+    fn block(&mut self) {
+        while !self.check(TokenType::RightBrace) && !self.check(TokenType::EoF) {
+            self.declaration();
+        }
+
+        self.consume(TokenType::RightBrace, "Expected '}' after block.");
     }
 
     fn declaration(&mut self) {
@@ -359,10 +482,19 @@ impl<'source> Compiler<'source> {
     }
 
     fn statement(&mut self) {
-        match self.matches(TokenType::Print) {
-            true => self.print_statement(),
-            false => self.expression_statement(),
+        if self.matches(TokenType::Print) {
+            self.print_statement();
+            return;
         }
+
+        if self.matches(TokenType::LeftBrace) {
+            self.begin_scope();
+            self.block();
+            self.end_scope();
+            return;
+        }
+
+        self.expression_statement();
     }
 
     fn print_statement(&mut self) {
