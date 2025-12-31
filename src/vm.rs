@@ -171,6 +171,14 @@ impl VM {
                 Instruction::Print => {
                     println!("{}", self.pop_stack());
                 }
+                Instruction::Jump(offset) => {
+                    self.ip += offset;
+                }
+                Instruction::JumpIfFalse(offset) => {
+                    if self.peek_stack(0).is_falsey() {
+                        self.ip += offset;
+                    }
+                }
                 Instruction::Return => return Ok(()),
             }
         }

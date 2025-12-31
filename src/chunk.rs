@@ -37,6 +37,10 @@ impl Chunk {
         &self.code[offset]
     }
 
+    pub(crate) fn get_instruction_mut(&mut self, offset: usize) -> &mut Instruction {
+        self.code.get_mut(offset).unwrap()
+    }
+
     pub(crate) fn get_code(&self) -> &[Instruction] {
         &self.code
     }

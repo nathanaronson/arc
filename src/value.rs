@@ -32,6 +32,6 @@ impl Debug for Value {
 
 impl Value {
     pub(crate) fn is_falsey(&self) -> bool {
-        matches!(self, Self::Nil | Self::Boolean(false))
+        matches!(self, Self::Nil | Self::Boolean(false) | Self::Number(0f64))
     }
 }

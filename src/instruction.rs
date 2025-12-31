@@ -20,5 +20,7 @@ pub enum Instruction {
     Not,
     Negate,
     Print,
+    Jump(usize),
+    JumpIfFalse(usize),
     Return,
 }

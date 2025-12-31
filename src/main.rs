@@ -1,6 +1,6 @@
 use arc::{ArcError, VM};
-use std::io::Write;
-use std::{env, fs, io, process};
+use std::io::{self, Write};
+use std::{env, fs, process};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -15,10 +15,11 @@ fn main() {
 }
 
 fn repl() {
+    print_banner();
     let mut vm = VM::new();
 
     loop {
-        print!("> ");
+        print!(">>> ");
         io::stdout().flush().expect("Could not flush stdout");
         let mut line = String::new();
         io::stdin()
@@ -42,4 +43,13 @@ fn run_file(path: &str) {
         Err(ArcError::CompileError) => process::exit(65),
         Err(ArcError::RuntimeError) => process::exit(70),
     }
+}
+
+fn print_banner() {
+    let name = env!("CARGO_PKG_NAME");
+    let version = env!("CARGO_PKG_VERSION");
+    let arch = env::consts::ARCH;
+    let bits = std::mem::size_of::<usize>() * 8;
+    let os = env::consts::OS;
+    println!("{} {} ({}, {}-bit) on {}", name, version, arch, bits, os);
 }

@@ -121,6 +121,8 @@ pub(crate) struct Parser<'source> {
 }
 
 impl<'source> Parser<'source> {
+    const JUMP_PLACEHOLDER: usize = u16::MAX as usize;
+
     pub(crate) fn new(source: &'source str, chunk: &'source mut Chunk) -> Self {
         Self {
             scanner: Scanner::new(source),
@@ -487,6 +489,11 @@ impl<'source> Parser<'source> {
             return;
         }
 
+        if self.matches(TokenType::If) {
+            self.if_statement();
+            return;
+        }
+
         if self.matches(TokenType::LeftBrace) {
             self.begin_scope();
             self.block();
@@ -501,6 +508,25 @@ impl<'source> Parser<'source> {
         self.expression();
         self.consume(TokenType::Semicolon, "Expected ';' after value.");
         self.emit_instruction(Instruction::Print);
+    }
+
+    fn if_statement(&mut self) {
+        self.consume(TokenType::LeftParen, "Expected '(' after 'if'.");
+        self.expression();
+        self.consume(TokenType::RightParen, "Expected ')' after condition.");
+
+        self.emit_instruction(Instruction::JumpIfFalse(Self::JUMP_PLACEHOLDER));
+        let then_jump = self.chunk.get_code().len() - 1;
+        self.emit_instruction(Instruction::Pop);
+        self.statement();
+        self.emit_instruction(Instruction::Jump(Self::JUMP_PLACEHOLDER));
+        let else_jump = self.chunk.get_code().len() - 1;
+        self.patch_jump(then_jump);
+        self.emit_instruction(Instruction::Pop);
+        if self.matches(TokenType::Else) {
+            self.statement();
+        }
+        self.patch_jump(else_jump);
     }
 
     fn expression_statement(&mut self) {
@@ -527,6 +553,22 @@ impl<'source> Parser<'source> {
     fn emit_constant(&mut self, value: Value) {
         let index = self.make_constant(value);
         self.emit_instruction(Instruction::Constant(index));
+    }
+
+    fn patch_jump(&mut self, offset: usize) {
+        let jump = self.chunk.get_code().len() - offset - 1;
+        let jump = match u16::try_from(jump) {
+            Ok(val) => val,
+            Err(_) => {
+                self.error("Too much code to jump over.");
+                u16::MAX
+            }
+        } as usize;
+
+        match self.chunk.get_instruction_mut(offset) {
+            Instruction::Jump(o) | Instruction::JumpIfFalse(o) => *o = jump,
+            _ => unreachable!(),
+        }
     }
 
     fn synchronize(&mut self) {
