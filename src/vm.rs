@@ -179,6 +179,9 @@ impl VM {
                         self.ip += offset;
                     }
                 }
+                Instruction::Loop(offset) => {
+                    self.ip -= offset;
+                }
                 Instruction::Return => return Ok(()),
             }
         }

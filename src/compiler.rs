@@ -510,6 +510,16 @@ impl<'source> Parser<'source> {
             return;
         }
 
+        if self.matches(TokenType::While) {
+            self.while_statement();
+            return;
+        }
+
+        if self.matches(TokenType::For) {
+            self.for_statement();
+            return;
+        }
+
         if self.matches(TokenType::LeftBrace) {
             self.begin_scope();
             self.block();
@@ -543,12 +553,74 @@ impl<'source> Parser<'source> {
         self.patch_jump(else_jump);
     }
 
+    fn while_statement(&mut self) {
+        let loop_start = self.chunk.get_count();
+        self.consume(TokenType::LeftParen, "Expected '(' after 'while'.");
+        self.expression();
+        self.consume(TokenType::RightParen, "Expected ')' after condition.");
+
+        let exit_jump = self.emit_jump(true);
+        self.emit_instruction(Instruction::Pop);
+        self.statement();
+        self.emit_loop(loop_start);
+
+        self.patch_jump(exit_jump);
+        self.emit_instruction(Instruction::Pop);
+    }
+
+    fn for_statement(&mut self) {
+        self.begin_scope();
+        self.consume(TokenType::LeftParen, "Expected '(' after 'if'.");
+
+        if self.matches(TokenType::Semicolon) {
+        } else if self.matches(TokenType::Var) {
+            self.var_declaration();
+        } else {
+            self.expression_statement();
+        }
+
+        let mut loop_start = self.chunk.get_count();
+        let mut exit_jump = None;
+
+        if !self.matches(TokenType::Semicolon) {
+            self.expression();
+            self.consume(TokenType::Semicolon, "Expected ';'.");
+
+            exit_jump = Some(self.emit_jump(true));
+            self.emit_instruction(Instruction::Pop);
+        }
+
+        if !self.matches(TokenType::RightParen) {
+            let body_jump = self.emit_jump(false);
+            let increment_start = self.chunk.get_count();
+            self.expression();
+            self.emit_instruction(Instruction::Pop);
+            self.consume(TokenType::RightParen, "Expected ')' after 'for' clauses.");
+            self.emit_loop(loop_start);
+            loop_start = increment_start;
+            self.patch_jump(body_jump);
+        }
+        self.statement();
+        self.emit_loop(loop_start);
+        if let Some(value) = exit_jump {
+            self.patch_jump(value);
+            self.emit_instruction(Instruction::Pop);
+        }
+        self.end_scope();
+    }
+
     fn emit_jump(&mut self, if_false: bool) -> usize {
         match if_false {
             true => self.emit_instruction(Instruction::JumpIfFalse(Self::JUMP_PLACEHOLDER)),
             false => self.emit_instruction(Instruction::Jump(Self::JUMP_PLACEHOLDER)),
         }
-        self.chunk.get_code().len() - 1
+        self.chunk.get_count() - 1
+    }
+
+    fn emit_loop(&mut self, loop_start: usize) {
+        let offset = self.chunk.get_count() - loop_start + 1;
+        let offset = self.clip_u16(offset, "Loop body too large.");
+        self.emit_instruction(Instruction::Loop(offset));
     }
 
     fn expression_statement(&mut self) {
@@ -578,18 +650,22 @@ impl<'source> Parser<'source> {
     }
 
     fn patch_jump(&mut self, offset: usize) {
-        let jump = self.chunk.get_code().len() - offset - 1;
-        let jump = match u16::try_from(jump) {
-            Ok(val) => val,
-            Err(_) => {
-                self.error("Too much code to jump over.");
-                u16::MAX
-            }
-        } as usize;
+        let jump = self.chunk.get_count() - offset - 1;
+        let jump = self.clip_u16(jump, "Too much code to jump over.");
 
         match self.chunk.get_instruction_mut(offset) {
             Instruction::Jump(o) | Instruction::JumpIfFalse(o) => *o = jump,
             _ => unreachable!(),
+        }
+    }
+
+    fn clip_u16(&mut self, value: usize, message: &str) -> usize {
+        match u16::try_from(value) {
+            Ok(_) => value,
+            Err(_) => {
+                self.error(message);
+                Self::JUMP_PLACEHOLDER
+            }
         }
     }
 

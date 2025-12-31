@@ -44,4 +44,8 @@ impl Chunk {
     pub(crate) fn get_code(&self) -> &[Instruction] {
         &self.code
     }
+
+    pub(crate) fn get_count(&self) -> usize {
+        self.code.len()
+    }
 }

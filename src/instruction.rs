@@ -22,5 +22,6 @@ pub enum Instruction {
     Print,
     Jump(usize),
     JumpIfFalse(usize),
+    Loop(usize),
     Return,
 }

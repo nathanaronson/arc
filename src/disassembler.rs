@@ -53,9 +53,12 @@ impl<'vm> Disassembler<'vm> {
             Instruction::Not => self.simple_instruction("OP_NOT"),
             Instruction::Negate => self.simple_instruction("OP_NEGATE"),
             Instruction::Print => self.simple_instruction("OP_PRINT"),
-            Instruction::Jump(jump) => self.jump_instruction("OP_JUMP", offset, *jump),
+            Instruction::Jump(jump) => self.jump_instruction("OP_JUMP", offset, *jump, 1),
             Instruction::JumpIfFalse(jump) => {
-                self.jump_instruction("OP_JUMPIFFALSE", offset, *jump)
+                self.jump_instruction("OP_JUMPIFFALSE", offset, *jump, 1)
+            }
+            Instruction::Loop(jump) => {
+                self.jump_instruction("OP_LOOP", offset, *jump, -1);
             }
             Instruction::Return => self.simple_instruction("OP_RETURN"),
         }
@@ -70,8 +73,9 @@ impl<'vm> Disassembler<'vm> {
         println!("{:<16} {:4}", name, index);
     }
 
-    fn jump_instruction(&self, name: &str, offset: usize, jump: usize) {
-        println!("{:<16} {:4} -> {}", name, offset, offset + jump + 1);
+    fn jump_instruction(&self, name: &str, offset: usize, jump: usize, sign: i8) {
+        let val = offset as i8 + jump as i8 * sign + 1;
+        println!("{:<16} {:4} -> {}", name, offset, val);
     }
 
     fn simple_instruction(&self, name: &str) {
