@@ -179,13 +179,13 @@ impl<'source> Parser<'source> {
         rule!(rules, True, Some(Parser::literal), None, None);
 
         // Keywords.
-        rule!(rules, And, None, None, None);
+        rule!(rules, And, None, Some(Parser::and), And);
         rule!(rules, Class, None, None, None);
         rule!(rules, Else, None, None, None);
         rule!(rules, For, None, None, None);
         rule!(rules, Fun, None, None, None);
         rule!(rules, If, None, None, None);
-        rule!(rules, Or, None, None, None);
+        rule!(rules, Or, None, Some(Parser::or), Or);
         rule!(rules, Print, None, None, None);
         rule!(rules, Return, None, None, None);
         rule!(rules, Super, None, None, None);
@@ -413,6 +413,22 @@ impl<'source> Parser<'source> {
         self.emit_instruction(Instruction::DefineGlobal(index));
     }
 
+    fn and(&mut self, _can_assign: bool) {
+        let end_jump = self.emit_jump(true);
+        self.emit_instruction(Instruction::Pop);
+        self.parse_precedence(Precedence::And);
+        self.patch_jump(end_jump);
+    }
+
+    fn or(&mut self, _can_assign: bool) {
+        let else_jump = self.emit_jump(true);
+        let end_jump = self.emit_jump(false);
+        self.patch_jump(else_jump);
+        self.emit_instruction(Instruction::Pop);
+        self.parse_precedence(Precedence::Or);
+        self.patch_jump(end_jump);
+    }
+
     fn mark_initialized(&mut self) {
         self.compiler.locals.last_mut().unwrap().depth = self.compiler.scope_depth;
     }
@@ -515,18 +531,24 @@ impl<'source> Parser<'source> {
         self.expression();
         self.consume(TokenType::RightParen, "Expected ')' after condition.");
 
-        self.emit_instruction(Instruction::JumpIfFalse(Self::JUMP_PLACEHOLDER));
-        let then_jump = self.chunk.get_code().len() - 1;
+        let then_jump = self.emit_jump(true);
         self.emit_instruction(Instruction::Pop);
         self.statement();
-        self.emit_instruction(Instruction::Jump(Self::JUMP_PLACEHOLDER));
-        let else_jump = self.chunk.get_code().len() - 1;
+        let else_jump = self.emit_jump(false);
         self.patch_jump(then_jump);
         self.emit_instruction(Instruction::Pop);
         if self.matches(TokenType::Else) {
             self.statement();
         }
         self.patch_jump(else_jump);
+    }
+
+    fn emit_jump(&mut self, if_false: bool) -> usize {
+        match if_false {
+            true => self.emit_instruction(Instruction::JumpIfFalse(Self::JUMP_PLACEHOLDER)),
+            false => self.emit_instruction(Instruction::Jump(Self::JUMP_PLACEHOLDER)),
+        }
+        self.chunk.get_code().len() - 1
     }
 
     fn expression_statement(&mut self) {
