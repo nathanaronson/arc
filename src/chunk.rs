@@ -1,5 +1,6 @@
 use crate::{Instruction, Value};
 
+#[derive(Clone, PartialEq)]
 pub struct Chunk {
     code: Vec<Instruction>,
     lines: Vec<u32>,

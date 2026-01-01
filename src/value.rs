@@ -1,3 +1,4 @@
+use crate::Function;
 use std::fmt::{Debug, Display, Formatter, Result};
 
 #[derive(Clone, PartialEq)]
@@ -6,6 +7,7 @@ pub(crate) enum Value {
     Number(f64),
     Nil,
     String(String),
+    Function(Function),
 }
 
 impl Display for Value {
@@ -15,6 +17,7 @@ impl Display for Value {
             Self::Number(value) => write!(f, "{}", value),
             Self::Nil => write!(f, "nil"),
             Self::String(value) => write!(f, "{}", value),
+            Self::Function(value) => write!(f, "{}", value),
         }
     }
 }
@@ -26,6 +29,7 @@ impl Debug for Value {
             Self::Number(value) => write!(f, "Number({})", value),
             Self::Nil => write!(f, "nil"),
             Self::String(value) => write!(f, "String({})", value),
+            Self::Function(value) => write!(f, "Function({})", value),
         }
     }
 }

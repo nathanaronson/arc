@@ -1,47 +1,47 @@
 use std::collections::{HashMap, hash_map::Entry};
 
-use crate::{ArcError, Chunk, Instruction, Parser, Value};
+use crate::{ArcError, Chunk, Compiler, Instruction, Parser, Value, function::Function};
 
 #[cfg(debug_assertions)]
 use crate::Disassembler;
 
 pub struct VM {
-    chunk: Chunk,
-    ip: usize,
+    frames: Vec<CallFrame>,
     stack: Vec<Value>,
     globals: HashMap<String, Value>,
 }
 
 impl VM {
-    const STACK_MAX: usize = 256;
+    const FRAMES_MAX: usize = 64;
+    const STACK_MAX: usize = Self::FRAMES_MAX * Compiler::LOCAL_MAX;
 
     pub fn new() -> Self {
         Self {
-            chunk: Chunk::new(),
-            ip: 0,
+            frames: Vec::with_capacity(Self::FRAMES_MAX),
             stack: Vec::with_capacity(Self::STACK_MAX),
             globals: HashMap::new(),
         }
     }
 
     pub fn interpret(&mut self, source: &str) -> Result<(), ArcError> {
-        let mut chunk = Chunk::new();
-        let mut compiler = Parser::new(source, &mut chunk);
-        if !compiler.compile() {
-            return Err(ArcError::CompileError);
+        let compiler = Parser::new(source);
+        match compiler.compile() {
+            Ok(function) => {
+                self.push_stack(Value::Function(function.clone()));
+                self.push_frame(function);
+                self.run()
+            }
+            Err(error) => Err(error),
         }
-        self.chunk = chunk;
-        self.ip = 0;
-        self.run()
     }
 
     fn run(&mut self) -> Result<(), ArcError> {
         loop {
-            let instruction = *self.chunk.get_instruction(self.ip);
+            let instruction = *self.chunk_ref().get_instruction(self.get_frame_ref().ip);
 
             #[cfg(debug_assertions)]
             {
-                let disassembler = Disassembler::new(&self.chunk);
+                let disassembler = Disassembler::new(self.chunk_ref());
 
                 print!("          ");
                 for value in self.stack.iter() {
@@ -49,13 +49,13 @@ impl VM {
                 }
                 println!();
 
-                disassembler.disassemble_instruction(self.ip, &instruction);
+                disassembler.disassemble_instruction(self.get_frame_ref().ip, &instruction);
             }
 
-            self.ip += 1;
+            self.get_frame().ip += 1;
             match instruction {
                 Instruction::Constant(index) => {
-                    let constant = self.chunk.get_constant(index).clone();
+                    let constant = self.chunk().get_constant(index).clone();
                     self.push_stack(constant);
                 }
                 Instruction::Nil => {
@@ -71,16 +71,21 @@ impl VM {
                     self.pop_stack();
                 }
                 Instruction::GetLocal(index) => {
-                    let value = self.stack.get(index).unwrap().clone();
+                    let value = self
+                        .stack
+                        .get(index + self.get_frame_ref().slot)
+                        .unwrap()
+                        .clone();
                     self.push_stack(value);
                 }
                 Instruction::SetLocal(index) => {
                     let top = self.peek_stack(0).clone();
-                    let value = self.stack.get_mut(index).unwrap();
+                    let offset = index + self.get_frame_ref().slot;
+                    let value = self.stack.get_mut(offset).unwrap();
                     *value = top;
                 }
                 Instruction::GetGlobal(index) => {
-                    if let Value::String(name) = self.chunk.get_constant(index) {
+                    if let Value::String(name) = self.chunk_ref().get_constant(index) {
                         match self.globals.get(name) {
                             Some(value) => self.push_stack(value.clone()),
                             None => {
@@ -91,7 +96,7 @@ impl VM {
                     }
                 }
                 Instruction::DefineGlobal(index) => {
-                    let Value::String(name) = self.chunk.get_constant(index).to_owned() else {
+                    let Value::String(name) = self.chunk().get_constant(index).to_owned() else {
                         unreachable!()
                     };
 
@@ -99,13 +104,14 @@ impl VM {
                     self.globals.insert(name, value);
                 }
                 Instruction::SetGlobal(index) => {
-                    let Value::String(name) = self.chunk.get_constant(index) else {
+                    let Value::String(name) = self.chunk_ref().get_constant(index).to_owned()
+                    else {
                         unreachable!()
                     };
                     let value = self.peek_stack(0).to_owned();
                     match self.globals.entry(name.clone()) {
                         Entry::Vacant(_) => {
-                            self.globals.remove(name);
+                            self.globals.remove(&name);
                             self.runtime_error(&format!("Undefined variable '{}'.", name));
                             return Err(ArcError::RuntimeError);
                         }
@@ -172,15 +178,15 @@ impl VM {
                     println!("{}", self.pop_stack());
                 }
                 Instruction::Jump(offset) => {
-                    self.ip += offset;
+                    self.get_frame().ip += offset;
                 }
                 Instruction::JumpIfFalse(offset) => {
                     if self.peek_stack(0).is_falsey() {
-                        self.ip += offset;
+                        self.get_frame().ip += offset;
                     }
                 }
                 Instruction::Loop(offset) => {
-                    self.ip -= offset;
+                    self.get_frame().ip -= offset;
                 }
                 Instruction::Return => return Ok(()),
             }
@@ -190,7 +196,7 @@ impl VM {
     fn runtime_error(&mut self, message: &str) {
         eprintln!("{}", message);
 
-        let line = self.chunk.get_line(self.ip - 1);
+        let line = self.chunk_ref().get_line(self.get_frame_ref().ip - 1);
         eprintln!("[line {}] in script", line);
         self.clear_stack();
     }
@@ -214,6 +220,22 @@ impl VM {
         }
     }
 
+    fn get_frame(&mut self) -> &mut CallFrame {
+        self.frames.last_mut().unwrap()
+    }
+
+    fn get_frame_ref(&self) -> &CallFrame {
+        self.frames.last().unwrap()
+    }
+
+    fn chunk(&mut self) -> &mut Chunk {
+        &mut self.get_frame().function.chunk
+    }
+
+    fn chunk_ref(&self) -> &Chunk {
+        &self.get_frame_ref().function.chunk
+    }
+
     fn peek_stack(&self, distance: usize) -> &Value {
         self.stack.get(self.stack.len() - distance - 1).unwrap()
     }
@@ -228,5 +250,26 @@ impl VM {
 
     fn clear_stack(&mut self) {
         self.stack.clear();
+        self.frames.clear();
+    }
+
+    fn push_frame(&mut self, function: Function) {
+        self.frames.push(CallFrame::new(function, 0));
+    }
+}
+
+pub struct CallFrame {
+    function: Function,
+    ip: usize,
+    slot: usize,
+}
+
+impl CallFrame {
+    fn new(function: Function, slot: usize) -> Self {
+        Self {
+            function,
+            ip: 0,
+            slot,
+        }
     }
 }
