@@ -23,5 +23,6 @@ pub enum Instruction {
     Jump(usize),
     JumpIfFalse(usize),
     Loop(usize),
+    Call(usize),
     Return,
 }

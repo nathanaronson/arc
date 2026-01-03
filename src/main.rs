@@ -28,7 +28,7 @@ fn repl() {
         if line.trim().is_empty() {
             break;
         }
-        vm.interpret(&line).ok();
+        let _ = vm.interpret(&line);
     }
 }
 

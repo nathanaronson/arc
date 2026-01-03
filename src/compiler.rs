@@ -139,7 +139,7 @@ impl<'source> Parser<'source> {
             rules: Parser::build_rules(),
             previous: Token::null(),
             current: Token::null(),
-            compiler: Compiler::new("main".to_string(), FunctionType::Script),
+            compiler: Compiler::new("".to_string(), FunctionType::Script),
             had_error: false,
             panic_mode: false,
         }
@@ -149,7 +149,13 @@ impl<'source> Parser<'source> {
         let mut rules = HashMap::new();
 
         // Literals / grouping.
-        rule!(rules, LeftParen, Some(Parser::grouping), None, None);
+        rule!(
+            rules,
+            LeftParen,
+            Some(Parser::grouping),
+            Some(Parser::call),
+            Call
+        );
         rule!(rules, RightParen, None, None, None);
         rule!(rules, LeftBrace, None, None, None);
         rule!(rules, RightBrace, None, None, None);
@@ -323,6 +329,11 @@ impl<'source> Parser<'source> {
         }
     }
 
+    fn call(&mut self, _can_assign: bool) {
+        let arg_count = self.argument_list();
+        self.emit_instruction(Instruction::Call(arg_count));
+    }
+
     fn literal(&mut self, _can_assign: bool) {
         match self.previous.kind {
             TokenType::False => self.emit_instruction(Instruction::False),
@@ -438,6 +449,24 @@ impl<'source> Parser<'source> {
             return;
         }
         self.emit_instruction(Instruction::DefineGlobal(index));
+    }
+
+    fn argument_list(&mut self) -> usize {
+        let mut arg_count = 0;
+        if !self.check(TokenType::RightParen) {
+            loop {
+                self.expression();
+                if arg_count == Function::MAX_PARAMS {
+                    self.error("Can't have more than 255 arguments.");
+                }
+                arg_count += 1;
+                if !self.matches(TokenType::Comma) {
+                    break;
+                }
+            }
+        }
+        self.consume(TokenType::RightParen, "Expected ')' after arguments.");
+        arg_count
     }
 
     fn and(&mut self, _can_assign: bool) {
@@ -583,6 +612,11 @@ impl<'source> Parser<'source> {
             return;
         }
 
+        if self.matches(TokenType::Return) {
+            self.return_statement();
+            return;
+        }
+
         if self.matches(TokenType::If) {
             self.if_statement();
             return;
@@ -612,6 +646,20 @@ impl<'source> Parser<'source> {
         self.expression();
         self.consume(TokenType::Semicolon, "Expected ';' after value.");
         self.emit_instruction(Instruction::Print);
+    }
+
+    fn return_statement(&mut self) {
+        if matches!(self.compiler.function_type, FunctionType::Script) {
+            self.error("Can't return from top-level code.");
+        }
+
+        if self.matches(TokenType::Semicolon) {
+            self.emit_return();
+        } else {
+            self.expression();
+            self.consume(TokenType::Semicolon, "Expected ';' after expression.");
+            self.emit_instruction(Instruction::Return);
+        }
     }
 
     fn if_statement(&mut self) {
@@ -708,7 +756,7 @@ impl<'source> Parser<'source> {
     }
 
     fn emit_return(&mut self) {
-        self.emit_instruction(Instruction::Return);
+        self.emit_instructions(Instruction::Nil, Instruction::Return);
     }
 
     fn make_constant(&mut self, value: Value) -> usize {

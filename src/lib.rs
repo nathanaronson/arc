@@ -13,7 +13,7 @@ pub use chunk::Chunk;
 use compiler::{Compiler, Parser};
 pub use disassembler::Disassembler;
 pub use error::ArcError;
-use function::{Function, FunctionType};
+use function::{Function, FunctionType, Native};
 pub use instruction::Instruction;
 use scanner::Scanner;
 use token::{Token, TokenType};

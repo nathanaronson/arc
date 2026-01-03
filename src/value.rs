@@ -1,4 +1,4 @@
-use crate::Function;
+use crate::{Function, Native};
 use std::fmt::{Debug, Display, Formatter, Result};
 
 #[derive(Clone, PartialEq)]
@@ -8,6 +8,7 @@ pub(crate) enum Value {
     Nil,
     String(String),
     Function(Function),
+    Native(Native),
 }
 
 impl Display for Value {
@@ -18,6 +19,7 @@ impl Display for Value {
             Self::Nil => write!(f, "nil"),
             Self::String(value) => write!(f, "{}", value),
             Self::Function(value) => write!(f, "{}", value),
+            Self::Native(value) => write!(f, "{}", value),
         }
     }
 }
@@ -30,6 +32,7 @@ impl Debug for Value {
             Self::Nil => write!(f, "nil"),
             Self::String(value) => write!(f, "String({})", value),
             Self::Function(value) => write!(f, "Function({})", value),
+            Self::Native(value) => write!(f, "Native({})", value),
         }
     }
 }
@@ -37,5 +40,12 @@ impl Debug for Value {
 impl Value {
     pub(crate) fn is_falsey(&self) -> bool {
         matches!(self, Self::Nil | Self::Boolean(false) | Self::Number(0f64))
+    }
+
+    pub(crate) fn try_string(&self) -> Option<&String> {
+        match self {
+            Self::String(string) => Some(string),
+            _ => None,
+        }
     }
 }

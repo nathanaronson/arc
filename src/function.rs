@@ -1,10 +1,13 @@
-use std::fmt::{Display, Formatter, Result};
+use std::{
+    fmt::{Display, Formatter, Result},
+    time::{SystemTime, UNIX_EPOCH},
+};
 
-use crate::Chunk;
+use crate::{Chunk, Value};
 
 #[derive(Clone, PartialEq)]
 pub(crate) struct Function {
-    arity: usize,
+    pub(crate) arity: usize,
     pub(crate) chunk: Chunk,
     pub(crate) name: String,
 }
@@ -35,4 +38,30 @@ impl Display for Function {
 pub(crate) enum FunctionType {
     Function,
     Script,
+}
+
+#[derive(Clone)]
+pub(crate) struct Native(pub(crate) fn(&[Value]) -> Value);
+
+impl PartialEq for Native {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self, other)
+    }
+}
+
+impl Display for Native {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "<native fn>")
+    }
+}
+
+impl Native {
+    pub(crate) fn clock(_args: &[Value]) -> Value {
+        Value::Number(
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as f64,
+        )
+    }
 }

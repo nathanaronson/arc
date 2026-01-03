@@ -2,7 +2,8 @@
 
 ## Description
 
-A bytecode-compiled programming language with a virtual machine written in [Rust](https://www.rust-lang.org/).
+Programming language which is bytecode-compiled and has stack-based virtual machine interpreter. It is written
+exclusively in [Rust](https://www.rust-lang.org/).
 
 ## Instructions
 
@@ -18,10 +19,4 @@ cargo run
 
 ```bash
 cargo run <file_name.arc>
-```
-
-### Run the Tests
-
-```bash
-cargo test
 ```

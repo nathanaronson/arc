@@ -1,6 +1,9 @@
 use std::collections::{HashMap, hash_map::Entry};
 
-use crate::{ArcError, Chunk, Compiler, Instruction, Parser, Value, function::Function};
+use crate::{
+    ArcError, Chunk, Compiler, Instruction, Parser, Value,
+    function::{Function, Native},
+};
 
 #[cfg(debug_assertions)]
 use crate::Disassembler;
@@ -16,11 +19,14 @@ impl VM {
     const STACK_MAX: usize = Self::FRAMES_MAX * Compiler::LOCAL_MAX;
 
     pub fn new() -> Self {
-        Self {
+        let mut vm = Self {
             frames: Vec::with_capacity(Self::FRAMES_MAX),
             stack: Vec::with_capacity(Self::STACK_MAX),
             globals: HashMap::new(),
-        }
+        };
+
+        vm.define_native("clock", Native(Native::clock));
+        vm
     }
 
     pub fn interpret(&mut self, source: &str) -> Result<(), ArcError> {
@@ -28,7 +34,7 @@ impl VM {
         match compiler.compile() {
             Ok(function) => {
                 self.push_stack(Value::Function(function.clone()));
-                self.push_frame(function);
+                let _ = self.call(function, 0);
                 self.run()
             }
             Err(error) => Err(error),
@@ -89,8 +95,8 @@ impl VM {
                         match self.globals.get(name) {
                             Some(value) => self.push_stack(value.clone()),
                             None => {
-                                self.runtime_error(&format!("Undefined variable '{}'.", name));
-                                return Err(ArcError::RuntimeError);
+                                return self
+                                    .runtime_error(&format!("Undefined variable '{}'.", name));
                             }
                         }
                     }
@@ -112,8 +118,7 @@ impl VM {
                     match self.globals.entry(name.clone()) {
                         Entry::Vacant(_) => {
                             self.globals.remove(&name);
-                            self.runtime_error(&format!("Undefined variable '{}'.", name));
-                            return Err(ArcError::RuntimeError);
+                            return self.runtime_error(&format!("Undefined variable '{}'.", name));
                         }
                         Entry::Occupied(mut e) => {
                             e.insert(value);
@@ -145,8 +150,8 @@ impl VM {
                             self.binary_operation(|x, y| x + y, Value::Number)?
                         }
                         _ => {
-                            self.runtime_error("Operands must be two numbers or two strings.");
-                            return Err(ArcError::RuntimeError);
+                            return self
+                                .runtime_error("Operands must be two numbers or two strings.");
                         }
                     }
                 }
@@ -166,8 +171,7 @@ impl VM {
                         }
                     }
                     _ => {
-                        self.runtime_error("Operand must be a number.");
-                        return Err(ArcError::RuntimeError);
+                        return self.runtime_error("Operand must be a number.");
                     }
                 },
                 Instruction::Not => {
@@ -188,17 +192,48 @@ impl VM {
                 Instruction::Loop(offset) => {
                     self.get_frame().ip -= offset;
                 }
-                Instruction::Return => return Ok(()),
+                Instruction::Call(arg_count) => {
+                    self.call_value(arg_count)?;
+                }
+                Instruction::Return => {
+                    let frame = self.frames.pop().unwrap();
+                    let result = self.pop_stack();
+                    if self.frames.is_empty() {
+                        self.pop_stack();
+                        return Ok(());
+                    }
+                    self.stack.truncate(frame.slot);
+                    self.push_stack(result);
+                }
             }
         }
     }
 
-    fn runtime_error(&mut self, message: &str) {
+    fn runtime_error(&mut self, message: &str) -> Result<(), ArcError> {
         eprintln!("{}", message);
 
-        let line = self.chunk_ref().get_line(self.get_frame_ref().ip - 1);
-        eprintln!("[line {}] in script", line);
+        for frame in self.frames.iter().rev() {
+            let line = frame.function.chunk.get_line(frame.ip - 1);
+            eprint!("[line {}] in ", line);
+            match frame.function.name.as_str() {
+                "" => eprintln!("script"),
+                _ => eprintln!("{}()", frame.function.name),
+            }
+        }
         self.clear_stack();
+        Err(ArcError::RuntimeError)
+    }
+
+    fn define_native(&mut self, name: &str, native: Native) {
+        let name = name.to_string();
+        self.push_stack(Value::String(name.clone()));
+        self.push_stack(Value::Native(native));
+        self.globals.insert(
+            self.peek_stack(1).try_string().unwrap().to_string(),
+            self.peek_stack(0).to_owned(),
+        );
+        self.pop_stack();
+        self.pop_stack();
     }
 
     fn binary_operation<Type>(
@@ -215,9 +250,40 @@ impl VM {
             }
             Ok(())
         } else {
-            self.runtime_error("Operands must be numbers.");
-            Err(ArcError::RuntimeError)
+            self.runtime_error("Operands must be numbers.")
         }
+    }
+
+    fn call_value(&mut self, arg_count: usize) -> Result<(), ArcError> {
+        let callee = self.peek_stack(arg_count).to_owned();
+        match callee {
+            Value::Function(function) => self.call(function.clone(), arg_count),
+            Value::Native(native) => {
+                let pivot = self.stack.len() - arg_count - 1;
+                let args = self.stack.split_off(pivot);
+                let result = native.0(args.as_slice());
+                self.push_stack(result);
+                Ok(())
+            }
+            _ => self.runtime_error("Can only call functions and classes."),
+        }
+    }
+
+    fn call(&mut self, function: Function, arg_count: usize) -> Result<(), ArcError> {
+        if arg_count != function.arity {
+            return self.runtime_error(&format!(
+                "Expected {} arguments but got {}.",
+                function.arity, arg_count
+            ));
+        }
+
+        if self.frames.len() == Self::FRAMES_MAX {
+            return self.runtime_error("Stack overflow.");
+        }
+
+        let frame = CallFrame::new(function.clone(), self.stack.len() - arg_count - 1);
+        self.frames.push(frame);
+        Ok(())
     }
 
     fn get_frame(&mut self) -> &mut CallFrame {
@@ -251,10 +317,6 @@ impl VM {
     fn clear_stack(&mut self) {
         self.stack.clear();
         self.frames.clear();
-    }
-
-    fn push_frame(&mut self, function: Function) {
-        self.frames.push(CallFrame::new(function, 0));
     }
 }
 

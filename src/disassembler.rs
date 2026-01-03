@@ -60,6 +60,9 @@ impl<'vm> Disassembler<'vm> {
             Instruction::Loop(jump) => {
                 self.jump_instruction("OP_LOOP", offset, *jump, -1);
             }
+            Instruction::Call(arg_count) => {
+                self.byte_instruction("OP_CALL", *arg_count);
+            }
             Instruction::Return => self.simple_instruction("OP_RETURN"),
         }
     }
