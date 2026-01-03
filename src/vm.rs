@@ -25,7 +25,8 @@ impl VM {
             globals: HashMap::new(),
         };
 
-        vm.define_native("clock", Native(Native::clock));
+        vm.define_native("clock", Native::clock());
+        vm.define_native("type_of", Native::type_of());
         vm
     }
 
@@ -258,13 +259,7 @@ impl VM {
         let callee = self.peek_stack(arg_count).to_owned();
         match callee {
             Value::Function(function) => self.call(function.clone(), arg_count),
-            Value::Native(native) => {
-                let pivot = self.stack.len() - arg_count - 1;
-                let args = self.stack.split_off(pivot);
-                let result = native.0(args.as_slice());
-                self.push_stack(result);
-                Ok(())
-            }
+            Value::Native(native) => self.call_native(native, arg_count),
             _ => self.runtime_error("Can only call functions and classes."),
         }
     }
@@ -284,6 +279,27 @@ impl VM {
         let frame = CallFrame::new(function.clone(), self.stack.len() - arg_count - 1);
         self.frames.push(frame);
         Ok(())
+    }
+
+    fn call_native(&mut self, native: Native, arg_count: usize) -> Result<(), ArcError> {
+        if arg_count != native.arity {
+            return self.runtime_error(&format!(
+                "Expected {} arguments but got {}.",
+                native.arity, arg_count
+            ));
+        }
+
+        let pivot = self.stack.len() - arg_count - 1;
+        let args = self.stack.split_off(pivot);
+        let result = (native.function)(args.as_slice());
+        match result {
+            Ok(result) => {
+                self.push_stack(result);
+                Ok(())
+            }
+
+            Err(_) => self.runtime_error("Failed to call function."),
+        }
     }
 
     fn get_frame(&mut self) -> &mut CallFrame {

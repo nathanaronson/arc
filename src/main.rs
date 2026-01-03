@@ -49,7 +49,7 @@ fn print_banner() {
     let name = env!("CARGO_PKG_NAME");
     let version = env!("CARGO_PKG_VERSION");
     let arch = env::consts::ARCH;
-    let bits = std::mem::size_of::<usize>() * 8;
+    let bits = usize::BITS as usize;
     let os = env::consts::OS;
     println!("{} {} ({}, {}-bit) on {}", name, version, arch, bits, os);
 }

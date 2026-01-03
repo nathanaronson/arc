@@ -215,6 +215,7 @@ impl<'source> Parser<'source> {
         rules
     }
 
+    #[cfg(debug_assertions)]
     fn current_chunk(&self) -> &Chunk {
         &self.compiler.function.chunk
     }

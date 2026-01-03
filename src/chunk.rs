@@ -42,6 +42,7 @@ impl Chunk {
         self.code.get_mut(offset).unwrap()
     }
 
+    #[cfg(debug_assertions)]
     pub(crate) fn get_code(&self) -> &[Instruction] {
         &self.code
     }

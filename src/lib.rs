@@ -1,5 +1,6 @@
 mod chunk;
 mod compiler;
+#[cfg(debug_assertions)]
 mod disassembler;
 mod error;
 mod function;
@@ -9,12 +10,13 @@ mod token;
 mod value;
 mod vm;
 
-pub use chunk::Chunk;
+use chunk::Chunk;
 use compiler::{Compiler, Parser};
-pub use disassembler::Disassembler;
+#[cfg(debug_assertions)]
+use disassembler::Disassembler;
 pub use error::ArcError;
 use function::{Function, FunctionType, Native};
-pub use instruction::Instruction;
+use instruction::Instruction;
 use scanner::Scanner;
 use token::{Token, TokenType};
 use value::Value;
