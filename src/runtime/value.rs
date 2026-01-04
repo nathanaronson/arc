@@ -1,4 +1,4 @@
-use crate::{Function, Native};
+use crate::runtime::{Function, Native};
 use std::fmt::{Debug, Display, Formatter, Result};
 
 #[derive(Clone, PartialEq)]
@@ -40,12 +40,5 @@ impl Debug for Value {
 impl Value {
     pub(crate) fn is_falsey(&self) -> bool {
         matches!(self, Self::Nil | Self::Boolean(false) | Self::Number(0f64))
-    }
-
-    pub(crate) fn try_string(&self) -> Option<&String> {
-        match self {
-            Self::String(string) => Some(string),
-            _ => None,
-        }
     }
 }

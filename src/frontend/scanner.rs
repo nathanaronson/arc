@@ -1,4 +1,4 @@
-use crate::{Token, TokenType};
+use crate::frontend::{Token, TokenType};
 use phf::phf_map;
 
 static RESERVED_KEYWORDS: phf::Map<&'static str, TokenType> = phf_map! {

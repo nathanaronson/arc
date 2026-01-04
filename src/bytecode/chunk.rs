@@ -1,14 +1,15 @@
-use crate::{Instruction, Value};
+use crate::bytecode::Instruction;
+use crate::runtime::Value;
 
 #[derive(Clone, PartialEq)]
-pub struct Chunk {
-    code: Vec<Instruction>,
-    lines: Vec<u32>,
-    constants: Vec<Value>,
+pub(crate) struct Chunk {
+    pub(crate) code: Vec<Instruction>,
+    pub(crate) lines: Vec<u32>,
+    pub(crate) constants: Vec<Value>,
 }
 
 impl Chunk {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             code: Vec::new(),
             lines: Vec::new(),
@@ -16,7 +17,7 @@ impl Chunk {
         }
     }
 
-    pub fn write(&mut self, instruction: Instruction, line: u32) {
+    pub(crate) fn write(&mut self, instruction: Instruction, line: u32) {
         self.code.push(instruction);
         self.lines.push(line);
     }
@@ -40,11 +41,6 @@ impl Chunk {
 
     pub(crate) fn get_instruction_mut(&mut self, offset: usize) -> &mut Instruction {
         self.code.get_mut(offset).unwrap()
-    }
-
-    #[cfg(debug_assertions)]
-    pub(crate) fn get_code(&self) -> &[Instruction] {
-        &self.code
     }
 
     pub(crate) fn get_count(&self) -> usize {

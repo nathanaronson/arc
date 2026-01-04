@@ -1,5 +1,5 @@
 #[derive(Copy, Clone, PartialEq)]
-pub enum Instruction {
+pub(crate) enum Instruction {
     Constant(usize),
     Nil,
     True,

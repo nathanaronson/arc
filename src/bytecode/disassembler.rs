@@ -1,18 +1,18 @@
-use crate::{Chunk, Instruction};
+use crate::bytecode::{Chunk, Instruction};
 
-pub struct Disassembler<'vm> {
+pub(crate) struct Disassembler<'vm> {
     chunk: &'vm Chunk,
 }
 
 impl<'vm> Disassembler<'vm> {
-    pub fn new(chunk: &'vm Chunk) -> Self {
+    pub(crate) fn new(chunk: &'vm Chunk) -> Self {
         Disassembler { chunk }
     }
 
-    pub fn disassemble_chunk(&self, name: &str) {
+    pub(crate) fn disassemble_chunk(&self, name: &str) {
         println!("== BEGIN {} ==", name);
 
-        for (offset, instruction) in self.chunk.get_code().iter().enumerate() {
+        for (offset, instruction) in self.chunk.code.iter().enumerate() {
             self.disassemble_instruction(offset, instruction);
         }
 

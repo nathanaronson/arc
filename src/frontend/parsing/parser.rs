@@ -1,66 +1,11 @@
-use crate::{
-    ArcError, Chunk, Function, FunctionType, Instruction, Scanner, Token, TokenType, Value,
-};
+use crate::bytecode::{Chunk, Instruction};
+use crate::frontend::{Compiler, Local, ParseRule, Precedence, Scanner, Token, TokenType};
+use crate::runtime::{ArcError, Function, FunctionType, Value};
 use std::collections::HashMap;
 use std::mem;
 
 #[cfg(debug_assertions)]
-use crate::Disassembler;
-
-#[derive(Eq, PartialEq, PartialOrd, Ord)]
-enum Precedence {
-    None,
-    Assignment, // =
-    Or,         // or
-    And,        // and
-    Equality,   // == !=
-    Comparison, // < > <= >=
-    Term,       // + -
-    Factor,     // * /
-    Unary,      // ! -
-    Call,       // . ()
-    Primary,
-}
-
-impl Precedence {
-    fn next(&self) -> Self {
-        match self {
-            Precedence::None => Precedence::Assignment,
-            Precedence::Assignment => Precedence::Or,
-            Precedence::Or => Precedence::And,
-            Precedence::And => Precedence::Equality,
-            Precedence::Equality => Precedence::Comparison,
-            Precedence::Comparison => Precedence::Term,
-            Precedence::Term => Precedence::Factor,
-            Precedence::Factor => Precedence::Unary,
-            Precedence::Unary => Precedence::Call,
-            Precedence::Call => Precedence::Primary,
-            Precedence::Primary => Precedence::None,
-        }
-    }
-}
-
-struct ParseRule<'source> {
-    prefix: Option<ParseFn<'source>>,
-    infix: Option<ParseFn<'source>>,
-    precedence: Precedence,
-}
-
-impl<'source> ParseRule<'source> {
-    fn new(
-        prefix: Option<ParseFn<'source>>,
-        infix: Option<ParseFn<'source>>,
-        precedence: Precedence,
-    ) -> Self {
-        Self {
-            prefix,
-            infix,
-            precedence,
-        }
-    }
-}
-
-type ParseFn<'source> = fn(&mut Parser<'source>, bool);
+use crate::bytecode::Disassembler;
 
 macro_rules! rule {
     ($map:expr, $kind:ident, $prefix:expr, $infix:expr, $prec:ident) => {
@@ -69,55 +14,6 @@ macro_rules! rule {
             ParseRule::new($prefix, $infix, Precedence::$prec),
         );
     };
-}
-
-pub(crate) struct Compiler<'source> {
-    enclosing: Option<Box<Compiler<'source>>>,
-    function: Function,
-    function_type: FunctionType,
-    locals: Vec<Local<'source>>,
-    scope_depth: i32,
-}
-
-impl<'source> Compiler<'source> {
-    pub(crate) const LOCAL_MAX: usize = u8::MAX as usize + 1;
-
-    fn new(name: String, function_type: FunctionType) -> Box<Self> {
-        let mut locals = Vec::with_capacity(Self::LOCAL_MAX);
-        locals.push(Local::new(Token::null(), 0));
-        Box::new(Self {
-            enclosing: None,
-            function: Function::new(name),
-            function_type,
-            locals,
-            scope_depth: 0,
-        })
-    }
-
-    fn is_same_scope(&self, name: &Token) -> u32 {
-        let mut count = 0;
-        for local in self.locals.iter().rev() {
-            if local.depth != -1 && local.depth < self.scope_depth {
-                return count;
-            }
-
-            if name.lexeme == local.name.lexeme {
-                count += 1;
-            }
-        }
-        count
-    }
-}
-
-struct Local<'source> {
-    name: Token<'source>,
-    depth: i32,
-}
-
-impl<'source> Local<'source> {
-    fn new(name: Token<'source>, depth: i32) -> Self {
-        Self { name, depth }
-    }
 }
 
 pub(crate) struct Parser<'source> {
@@ -215,11 +111,6 @@ impl<'source> Parser<'source> {
         rules
     }
 
-    #[cfg(debug_assertions)]
-    fn current_chunk(&self) -> &Chunk {
-        &self.compiler.function.chunk
-    }
-
     fn current_chunk_mut(&mut self) -> &mut Chunk {
         &mut self.compiler.function.chunk
     }
@@ -281,7 +172,7 @@ impl<'source> Parser<'source> {
         #[cfg(debug_assertions)]
         {
             if !self.had_error {
-                let disassembler = Disassembler::new(self.current_chunk());
+                let disassembler = Disassembler::new(&self.compiler.function.chunk);
                 let name = match &function.name {
                     s if s.is_empty() => "<script>",
                     _ => &self.compiler.function.name,
@@ -550,7 +441,8 @@ impl<'source> Parser<'source> {
         self.consume(TokenType::LeftParen, "Expected '(' after function name.");
         if !self.check(TokenType::RightParen) {
             loop {
-                if self.compiler.function.increment_arity() > Function::MAX_PARAMS {
+                self.compiler.function.arity += 1;
+                if self.compiler.function.arity > Function::MAX_PARAMS {
                     self.error_at_current(&format!(
                         "Can't have more than {} parameters.",
                         Function::MAX_PARAMS

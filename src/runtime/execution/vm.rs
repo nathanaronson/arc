@@ -1,17 +1,21 @@
+use crate::bytecode::{Chunk, Instruction};
+use crate::frontend::{Compiler, Parser};
+use crate::runtime::{ArcError, CallFrame, Function, Native, Value};
 use std::collections::{HashMap, hash_map::Entry};
 
-use crate::{
-    ArcError, Chunk, Compiler, Instruction, Parser, Value,
-    function::{Function, Native},
-};
-
 #[cfg(debug_assertions)]
-use crate::Disassembler;
+use crate::bytecode::Disassembler;
 
 pub struct VM {
     frames: Vec<CallFrame>,
     stack: Vec<Value>,
     globals: HashMap<String, Value>,
+}
+
+impl Default for VM {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl VM {
@@ -31,8 +35,8 @@ impl VM {
     }
 
     pub fn interpret(&mut self, source: &str) -> Result<(), ArcError> {
-        let compiler = Parser::new(source);
-        match compiler.compile() {
+        let parser = Parser::new(source);
+        match parser.compile() {
             Ok(function) => {
                 self.push_stack(Value::Function(function.clone()));
                 let _ = self.call(function, 0);
@@ -230,7 +234,12 @@ impl VM {
         self.push_stack(Value::String(name.clone()));
         self.push_stack(Value::Native(native));
         self.globals.insert(
-            self.peek_stack(1).try_string().unwrap().to_string(),
+            match self.peek_stack(1) {
+                Value::String(string) => Some(string),
+                _ => None,
+            }
+            .unwrap()
+            .to_string(),
             self.peek_stack(0).to_owned(),
         );
         self.pop_stack();
@@ -333,21 +342,5 @@ impl VM {
     fn clear_stack(&mut self) {
         self.stack.clear();
         self.frames.clear();
-    }
-}
-
-pub struct CallFrame {
-    function: Function,
-    ip: usize,
-    slot: usize,
-}
-
-impl CallFrame {
-    fn new(function: Function, slot: usize) -> Self {
-        Self {
-            function,
-            ip: 0,
-            slot,
-        }
     }
 }
