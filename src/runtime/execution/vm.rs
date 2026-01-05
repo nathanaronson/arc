@@ -1,6 +1,6 @@
 use crate::bytecode::{Chunk, Instruction};
 use crate::frontend::{Compiler, Parser};
-use crate::runtime::{ArcError, CallFrame, Function, Native, Value};
+use crate::runtime::{ArcError, CallFrame, Closure, Native, Value};
 use std::collections::{HashMap, hash_map::Entry};
 
 #[cfg(debug_assertions)]
@@ -38,8 +38,9 @@ impl VM {
         let parser = Parser::new(source);
         match parser.compile() {
             Ok(function) => {
-                self.push_stack(Value::Function(function.clone()));
-                let _ = self.call(function, 0);
+                let closure = Closure::new(function);
+                self.push_stack(Value::Closure(closure.clone()));
+                let _ = self.call(closure, 0);
                 self.run()
             }
             Err(error) => Err(error),
@@ -200,6 +201,13 @@ impl VM {
                 Instruction::Call(arg_count) => {
                     self.call_value(arg_count)?;
                 }
+                Instruction::Closure(offset) => {
+                    let Value::Function(function) = self.chunk_ref().get_constant(offset) else {
+                        panic!()
+                    };
+                    let closure = Closure::new(function.to_owned());
+                    self.push_stack(Value::Closure(closure));
+                }
                 Instruction::Return => {
                     let frame = self.frames.pop().unwrap();
                     let result = self.pop_stack();
@@ -218,11 +226,11 @@ impl VM {
         eprintln!("{}", message);
 
         for frame in self.frames.iter().rev() {
-            let line = frame.function.chunk.get_line(frame.ip - 1);
+            let line = frame.closure.function.chunk.get_line(frame.ip - 1);
             eprint!("[line {}] in ", line);
-            match frame.function.name.as_str() {
+            match frame.closure.function.name.as_str() {
                 "" => eprintln!("script"),
-                _ => eprintln!("{}()", frame.function.name),
+                _ => eprintln!("{}()", frame.closure.function.name),
             }
         }
         self.clear_stack();
@@ -267,17 +275,17 @@ impl VM {
     fn call_value(&mut self, arg_count: usize) -> Result<(), ArcError> {
         let callee = self.peek_stack(arg_count).to_owned();
         match callee {
-            Value::Function(function) => self.call(function.clone(), arg_count),
+            Value::Closure(closure) => self.call(closure.clone(), arg_count),
             Value::Native(native) => self.call_native(native, arg_count),
             _ => self.runtime_error("Can only call functions and classes."),
         }
     }
 
-    fn call(&mut self, function: Function, arg_count: usize) -> Result<(), ArcError> {
-        if arg_count != function.arity {
+    fn call(&mut self, closure: Closure, arg_count: usize) -> Result<(), ArcError> {
+        if arg_count != closure.function.arity {
             return self.runtime_error(&format!(
                 "Expected {} arguments but got {}.",
-                function.arity, arg_count
+                closure.function.arity, arg_count
             ));
         }
 
@@ -285,7 +293,7 @@ impl VM {
             return self.runtime_error("Stack overflow.");
         }
 
-        let frame = CallFrame::new(function.clone(), self.stack.len() - arg_count - 1);
+        let frame = CallFrame::new(closure.clone(), self.stack.len() - arg_count - 1);
         self.frames.push(frame);
         Ok(())
     }
@@ -320,11 +328,11 @@ impl VM {
     }
 
     fn chunk(&mut self) -> &mut Chunk {
-        &mut self.get_frame().function.chunk
+        &mut self.get_frame().closure.function.chunk
     }
 
     fn chunk_ref(&self) -> &Chunk {
-        &self.get_frame_ref().function.chunk
+        &self.get_frame_ref().closure.function.chunk
     }
 
     fn peek_stack(&self, distance: usize) -> &Value {

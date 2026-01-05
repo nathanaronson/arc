@@ -460,7 +460,7 @@ impl<'source> Parser<'source> {
         self.block();
         let function = self.end_compiler();
         let index = self.make_constant(Value::Function(function));
-        self.emit_instruction(Instruction::Constant(index));
+        self.emit_instruction(Instruction::Closure(index));
     }
 
     fn declaration(&mut self) {

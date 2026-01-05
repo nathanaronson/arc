@@ -1,15 +1,15 @@
-use crate::runtime::Function;
+use crate::runtime::Closure;
 
 pub(crate) struct CallFrame {
-    pub(crate) function: Function,
+    pub(crate) closure: Closure,
     pub(crate) ip: usize,
     pub(crate) slot: usize,
 }
 
 impl CallFrame {
-    pub(crate) fn new(function: Function, slot: usize) -> Self {
+    pub(crate) fn new(closure: Closure, slot: usize) -> Self {
         Self {
-            function,
+            closure,
             ip: 0,
             slot,
         }

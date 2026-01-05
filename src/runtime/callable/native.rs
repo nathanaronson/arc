@@ -57,6 +57,7 @@ impl Native {
                 Value::Number(_) => Ok(Value::String("number".to_string())),
                 Value::Nil => Ok(Value::String("nil".to_string())),
                 Value::String(_) => Ok(Value::String("string".to_string())),
+                Value::Closure(_) => Ok(Value::String("closure".to_string())),
                 Value::Function(_) => Ok(Value::String("function".to_string())),
                 Value::Native(_) => Ok(Value::String("native".to_string())),
             }

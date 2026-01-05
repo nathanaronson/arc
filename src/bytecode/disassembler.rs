@@ -57,12 +57,14 @@ impl<'vm> Disassembler<'vm> {
             Instruction::JumpIfFalse(jump) => {
                 self.jump_instruction("OP_JUMPIFFALSE", offset, *jump, 1)
             }
-            Instruction::Loop(jump) => {
-                self.jump_instruction("OP_LOOP", offset, *jump, -1);
-            }
-            Instruction::Call(arg_count) => {
-                self.byte_instruction("OP_CALL", *arg_count);
-            }
+            Instruction::Loop(jump) => self.jump_instruction("OP_LOOP", offset, *jump, -1),
+            Instruction::Call(arg_count) => self.byte_instruction("OP_CALL", *arg_count),
+            Instruction::Closure(constant) => println!(
+                "{:<16} {:4} {}",
+                "OP_CLOSURE",
+                constant,
+                self.chunk.get_constant(*constant)
+            ),
             Instruction::Return => self.simple_instruction("OP_RETURN"),
         }
     }

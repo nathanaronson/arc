@@ -24,5 +24,6 @@ pub(crate) enum Instruction {
     JumpIfFalse(usize),
     Loop(usize),
     Call(usize),
+    Closure(usize),
     Return,
 }

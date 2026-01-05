@@ -1,5 +1,6 @@
 use arc::{ArcError, VM};
-use std::io::{self, Write};
+use rustyline::DefaultEditor;
+use rustyline::error::ReadlineError;
 use std::{env, fs, process};
 
 fn main() {
@@ -18,17 +19,37 @@ fn repl() {
     print_banner();
     let mut vm = VM::new();
 
+    let mut rl = DefaultEditor::new().unwrap_or_else(|err| {
+        eprintln!("Failed to initialize readline editor: {}", err);
+        process::exit(1);
+    });
+
     loop {
-        print!(">>> ");
-        io::stdout().flush().expect("Could not flush stdout");
-        let mut line = String::new();
-        io::stdin()
-            .read_line(&mut line)
-            .expect("Could not read from stdin");
-        if line.trim().is_empty() {
-            break;
+        let readline = rl.readline(">>> ");
+        match readline {
+            Ok(line) => {
+                let trimmed = line.trim();
+
+                if trimmed.is_empty() {
+                    break;
+                }
+
+                let _ = rl.add_history_entry(line.as_str());
+
+                let _ = vm.interpret(&line);
+            }
+            Err(err @ ReadlineError::Interrupted) => {
+                println!("{}", err);
+            }
+            Err(err @ ReadlineError::Eof) => {
+                println!("{}", err);
+                break;
+            }
+            Err(err) => {
+                println!("REPL Error: {:?}", err);
+                break;
+            }
         }
-        let _ = vm.interpret(&line);
     }
 }
 
