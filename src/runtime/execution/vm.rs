@@ -30,6 +30,7 @@ impl VM {
         };
 
         vm.define_native("clock", Native::clock());
+        vm.define_native("print", Native::print());
         vm.define_native("type_of", Native::type_of());
         vm
     }
@@ -183,9 +184,6 @@ impl VM {
                 Instruction::Not => {
                     let value = self.pop_stack().is_falsey();
                     self.push_stack(Value::Boolean(value));
-                }
-                Instruction::Print => {
-                    println!("{}", self.pop_stack());
                 }
                 Instruction::Jump(offset) => {
                     self.get_frame().ip += offset;

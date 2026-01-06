@@ -97,7 +97,6 @@ impl<'source> Parser<'source> {
         rule!(rules, Fun, None, None, None);
         rule!(rules, If, None, None, None);
         rule!(rules, Or, None, Some(Parser::or), Or);
-        rule!(rules, Print, None, None, None);
         rule!(rules, Return, None, None, None);
         rule!(rules, Super, None, None, None);
         rule!(rules, This, None, None, None);
@@ -500,11 +499,6 @@ impl<'source> Parser<'source> {
     }
 
     fn statement(&mut self) {
-        if self.matches(TokenType::Print) {
-            self.print_statement();
-            return;
-        }
-
         if self.matches(TokenType::Return) {
             self.return_statement();
             return;
@@ -533,12 +527,6 @@ impl<'source> Parser<'source> {
         }
 
         self.expression_statement();
-    }
-
-    fn print_statement(&mut self) {
-        self.expression();
-        self.consume(TokenType::Semicolon, "Expected ';' after value.");
-        self.emit_instruction(Instruction::Print);
     }
 
     fn return_statement(&mut self) {
@@ -702,7 +690,6 @@ impl<'source> Parser<'source> {
                 | TokenType::For
                 | TokenType::If
                 | TokenType::While
-                | TokenType::Print
                 | TokenType::Return => return,
                 _ => {}
             }

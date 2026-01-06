@@ -21,6 +21,23 @@ impl Display for Native {
 }
 
 impl Native {
+    pub(crate) fn print() -> Self {
+        Self {
+            function: Self::print_impl,
+            arity: 1,
+        }
+    }
+
+    fn print_impl(args: &[Value]) -> Result<Value, ArcError> {
+        if args.len() != 2 {
+            Err(ArcError::RuntimeError)
+        } else {
+            let value = args.last().unwrap();
+            println!("{}", value);
+            Ok(Value::Nil)
+        }
+    }
+
     pub(crate) fn clock() -> Self {
         Self {
             function: Self::clock_impl,

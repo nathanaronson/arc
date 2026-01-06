@@ -59,7 +59,6 @@ pub(crate) enum TokenType {
     If,
     Nil,
     Or,
-    Print,
     Return,
     Super,
     This,

@@ -52,7 +52,6 @@ impl<'vm> Disassembler<'vm> {
             Instruction::Divide => self.simple_instruction("OP_DIVIDE"),
             Instruction::Not => self.simple_instruction("OP_NOT"),
             Instruction::Negate => self.simple_instruction("OP_NEGATE"),
-            Instruction::Print => self.simple_instruction("OP_PRINT"),
             Instruction::Jump(jump) => self.jump_instruction("OP_JUMP", offset, *jump, 1),
             Instruction::JumpIfFalse(jump) => {
                 self.jump_instruction("OP_JUMPIFFALSE", offset, *jump, 1)

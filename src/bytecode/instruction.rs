@@ -19,7 +19,6 @@ pub(crate) enum Instruction {
     Divide,
     Not,
     Negate,
-    Print,
     Jump(usize),
     JumpIfFalse(usize),
     Loop(usize),
