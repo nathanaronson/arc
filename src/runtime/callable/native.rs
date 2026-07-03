@@ -1,5 +1,6 @@
 use crate::runtime::{ArcError, Value};
 use std::fmt::{self, Display, Formatter};
+#[cfg(not(target_arch = "wasm32"))]
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone)]
@@ -33,7 +34,7 @@ impl Native {
             Err(ArcError::RuntimeError)
         } else {
             let value = args.last().unwrap();
-            println!("{}", value);
+            crate::output::out(&format!("{}\n", value));
             Ok(Value::Nil)
         }
     }
@@ -49,13 +50,21 @@ impl Native {
         if args.len() != 1 {
             Err(ArcError::RuntimeError)
         } else {
-            Ok(Value::Number(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis() as f64,
-            ))
+            Ok(Value::Number(Self::now_millis()))
         }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn now_millis() -> f64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as f64
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn now_millis() -> f64 {
+        js_sys::Date::now()
     }
 
     pub(crate) fn type_of() -> Self {

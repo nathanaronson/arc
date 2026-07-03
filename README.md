@@ -19,3 +19,14 @@ cargo run
 ```bash
 cargo run <file_name.arc>
 ```
+
+### Run the Web Playground
+
+You will need [wasm-pack](https://drager.github.io/wasm-pack/) installed to build Arc for WebAssembly.
+
+```bash
+wasm-pack build --target web --out-dir web/pkg
+python3 -m http.server 8000 --directory web
+```
+
+Then open <http://localhost:8000> in your browser.

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Arc Playground</title>
+    <meta name="description" content="Run Arc — a bytecode-compiled language with a Rust VM — in your browser via WebAssembly.">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M 4 26 Q 16 2 28 26' fill='none' stroke='%23888888' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="style.css">
+    <script>
+        document.documentElement.dataset.theme =
+            localStorage.getItem("theme") ||
+            (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    </script>
+</head>
+<body>
+    <header class="site-header">
+        <div class="wordmark">
+            <svg class="arc-stroke" viewBox="0 0 120 34" aria-hidden="true">
+                <path d="M 6 30 Q 60 -14 114 30" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+            </svg>
+            <h1>arc</h1>
+        </div>
+        <button id="theme" aria-label="Toggle color theme"></button>
+    </header>
+
+    <main class="workspace">
+        <section class="pane" aria-label="Editor">
+            <div class="pane-header">
+                <select id="examples" aria-label="Example programs"></select>
+                <button id="run" disabled>Run</button>
+            </div>
+            <div class="editor-body">
+                <pre class="gutter" id="gutter" aria-hidden="true">1</pre>
+                <textarea id="source" spellcheck="false" autocomplete="off"
+                    aria-label="Arc source code"></textarea>
+            </div>
+        </section>
+
+        <section class="pane" aria-label="Output">
+            <div class="pane-header">
+                <span class="status" id="status">loading…</span>
+            </div>
+            <div class="output-body">
+                <pre class="stdout" id="stdout"></pre>
+                <pre class="stderr" id="stderr"></pre>
+            </div>
+        </section>
+    </main>
+
+    <script type="module" src="main.js"></script>
+</body>
+</html>

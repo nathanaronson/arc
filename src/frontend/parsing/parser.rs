@@ -711,12 +711,12 @@ impl<'source> Parser<'source> {
         }
         self.had_error = true;
         self.panic_mode = true;
-        eprint!("[line {}] Error", token.line);
+        crate::output::err(&format!("[line {}] Error", token.line));
         match token.kind {
-            TokenType::EoF => eprint!(" at end"),
+            TokenType::EoF => crate::output::err(" at end"),
             TokenType::Error => {}
-            _ => eprint!(" at '{}'", token.lexeme),
+            _ => crate::output::err(&format!(" at '{}'", token.lexeme)),
         }
-        eprintln!(": {}", message);
+        crate::output::err(&format!(": {}\n", message));
     }
 }

@@ -221,14 +221,14 @@ impl VM {
     }
 
     fn runtime_error(&mut self, message: &str) -> Result<(), ArcError> {
-        eprintln!("{}", message);
+        crate::output::err(&format!("{}\n", message));
 
         for frame in self.frames.iter().rev() {
             let line = frame.closure.function.chunk.get_line(frame.ip - 1);
-            eprint!("[line {}] in ", line);
+            crate::output::err(&format!("[line {}] in ", line));
             match frame.closure.function.name.as_str() {
-                "" => eprintln!("script"),
-                _ => eprintln!("{}()", frame.closure.function.name),
+                "" => crate::output::err("script\n"),
+                _ => crate::output::err(&format!("{}()\n", frame.closure.function.name)),
             }
         }
         self.clear_stack();
