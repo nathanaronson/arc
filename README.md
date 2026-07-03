@@ -33,4 +33,4 @@ Then open <http://localhost:8000> in your browser.
 
 ## Live Playground
 
-Currently hosted on my [personal website](https://seas.upenn.edu/~narons/arc/).
+Currently hosted on my personal website: [https://seas.upenn.edu/~narons/arc/](https://seas.upenn.edu/~narons/arc/).
