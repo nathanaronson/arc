@@ -30,3 +30,7 @@ python3 -m http.server 8000 --directory web
 ```
 
 Then open <http://localhost:8000> in your browser.
+
+## Live Playground
+
+Currently hosted at my [personal website](https://seas.upenn.edu/~narons/arc/).
